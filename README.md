@@ -16,7 +16,7 @@ Hecate was a goddess in ancient Greek religion associated with crossroads. In XM
 
 ## Summary
 
-XMiDT has historically relied on SNS as the method to keep a distributed list of event webhook subcriptions. Now, it relies on [argus](https://github.com/xmidt-org/argus/) to handle those storage needs. As teams may need to upgrade their XMiDT services without downtime or disruptions, Hecate is here to help ensure all the webhook data between SNS and Argus is synchronized during the transition.
+XMiDT has historically relied on SNS as the method to keep a distributed list of event webhook subscriptions. Now, it relies on [argus](https://github.com/xmidt-org/argus/) to handle those storage needs. As teams may need to upgrade their XMiDT services without downtime or disruptions, Hecate is here to help ensure all the webhook data between SNS and Argus is synchronized during the migration.
 
 ## Table of Contents
 
@@ -32,7 +32,7 @@ By participating, you agree to this Code.
 
 ## Details
 
-Hecate's job consists in listening for webhook updates from SNS and pushing them to Argus. 
+Hecate's job consists in listening for webhook updates from SNS and pushing them to Argus.
 
 ## Build
 
