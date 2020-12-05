@@ -1,0 +1,39 @@
+---
+fqdn: "hecate"
+env: test
+
+primary:
+  address: ":6700"
+health:
+  address: ":6701"
+pprof:
+  address: ":6702"
+metric:
+  address: ":6703"
+  metricsOptions:
+    namespace: "xmidt"
+    subsystem: "hecate"
+log:
+  file: "stdout"
+  level: "DEBUG"
+  json: false
+
+scheme: http  
+aws:
+  accessKey: "supbro"
+  secretKey: "nahbro"
+  env: local-dev
+  sns:
+    awsEndpoint: http://goaws:4100
+    region: "us-east-1"
+    topicArn: arn:aws:sns:us-east-1:000000000000:xmidt-local-caduceus
+    urlPath: "/api/v2/aws/sns"
+
+webhook:
+  argus: 
+    bucket: "webhooks"
+    pullInterval: 5s
+    adminToken: Hzu1WpIe7S8G 
+    address: "http://argus:6600"
+    auth:
+      basic: "Basic dXNlcjpwYXNz"

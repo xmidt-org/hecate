@@ -5,24 +5,24 @@ import (
 	"fmt"
 	"io"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
 	"time"
 
-	"github.com/xmidt-org/argus/chrysom"
-	"github.com/xmidt-org/argus/model"
-
 	"github.com/go-kit/kit/log"
 	"github.com/goph/emperror"
+	"github.com/gorilla/mux"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/prometheus/common/route"
 	"github.com/xmidt-org/webpa-common/concurrent"
 	"github.com/xmidt-org/webpa-common/logging"
 	"github.com/xmidt-org/webpa-common/server"
 	"github.com/xmidt-org/webpa-common/webhook"
+	"github.com/xmidt-org/webpa-common/webhook/aws"
+	"github.com/xmidt-org/webpa-common/xwebhook"
 )
 
 const (
@@ -37,7 +37,7 @@ var (
 )
 
 type Config struct {
-	Argus chrysom.ClientConfig
+	Webhook xwebhook.Config
 }
 
 func hecate(arguments []string) int {
@@ -45,7 +45,7 @@ func hecate(arguments []string) int {
 
 	var (
 		f, v                                = pflag.NewFlagSet(applicationName, pflag.ContinueOnError), viper.New()
-		logger, metricsRegistry, codex, err = server.Initialize(applicationName, arguments, f, v, webhook.Metrics)
+		logger, metricsRegistry, codex, err = server.Initialize(applicationName, arguments, f, v, webhook.Metrics, aws.Metrics, xwebhook.Metrics)
 	)
 
 	if parseErr, done := printVersion(f, arguments); done {
@@ -70,47 +70,48 @@ func hecate(arguments []string) int {
 	}
 	webhookRegistry, webhookHandler := webhookFactory.NewRegistryAndHandler(metricsRegistry)
 
-	webhookFactory.Initialize(nil, nil, "", webhookHandler, logger, metricsRegistry, nil)
+	scheme := v.GetString("scheme")
+	if len(scheme) < 1 {
+		scheme = "https"
+	}
 
-	hookStorage, err := chrysom.CreateClient(config.Argus, chrysom.WithLogger(logger))
+	selfURL := &url.URL{
+		Scheme: scheme,
+		Host:   v.GetString("fqdn") + v.GetString("primary.address"),
+	}
+
+	rootRouter := mux.NewRouter()
+	webhookFactory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, metricsRegistry, time.Now)
+
+	config.Webhook.Argus.MetricsProvider = metricsRegistry
+	config.Webhook.Argus.Logger = logger
+	svc, stopWatches, err := xwebhook.Initialize(&config.Webhook)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating new argus store: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Error initializing xwebhook %s\n", err)
 		return 1
 	}
+	defer stopWatches()
 
 	logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName), "elapsedTime", time.Since(start))
 
 	// The actual logic
-
-	_, runnable, done := codex.Prepare(logger, nil, metricsRegistry, route.New())
+	_, runnable, done := codex.Prepare(logger, nil, metricsRegistry, rootRouter)
 
 	waitGroup, shutdown, err := concurrent.Execute(runnable)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to start device manager: %s\n", err)
 		return 1
 	}
-	waitGroup.Add(1)
-	go func() {
-		for change := range webhookRegistry.Changes {
-			for _, hook := range change {
-				webhook := map[string]interface{}{}
-				data, err := json.Marshal(&hook)
-				if err != nil {
-					continue
-				}
-				err = json.Unmarshal(data, &webhook)
-				if err != nil {
-					continue
-				}
-				hookStorage.Push(model.Item{
-					Identifier: hook.ID(),
-					Data:       webhook,
-					TTL:        config.Argus.DefaultTTL,
-				}, "")
-			}
-		}
-		waitGroup.Done()
-	}()
+	webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
+
+	// wait for DNS to propagate before subscribing to SNS
+	if err = webhookFactory.DnsReady(); err == nil {
+		logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
+		webhookFactory.PrepareAndStart()
+	} else {
+		logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
+			logging.ErrorKey(), err)
+	}
 
 	signals := make(chan os.Signal, 10)
 	signal.Notify(signals)
@@ -131,6 +132,25 @@ func hecate(arguments []string) int {
 	waitGroup.Wait()
 
 	return 0
+}
+
+func createArgusSynchronizer(svc xwebhook.Service, logger log.Logger) func([]webhook.W) {
+	return func(webhooks []webhook.W) {
+		for _, w := range webhooks {
+			logging.Info(logger).Log("msg", "Pushing webhook update from SNS into Argus")
+
+			webhook, err := toNewWebhook(&w)
+			if err != nil {
+				logging.Error(logger).Log(logging.MessageKey(), "could not convert to new webhook struct", "err", err)
+				continue
+			}
+			err = svc.Add("Argus", webhook)
+			if err != nil {
+				logging.Error(logger).Log(logging.MessageKey(), "could not add webhook to argus", "err", err)
+			}
+
+		}
+	}
 }
 
 func printVersion(f *pflag.FlagSet, arguments []string) (error, bool) {
@@ -163,6 +183,19 @@ func exitIfError(logger log.Logger, err error) {
 		fmt.Fprintf(os.Stderr, "Error: %#v\n", err.Error())
 		os.Exit(1)
 	}
+}
+
+func toNewWebhook(w *webhook.W) (*xwebhook.Webhook, error) {
+	data, err := json.Marshal(w)
+	if err != nil {
+		return nil, err
+	}
+	xw := new(xwebhook.Webhook)
+	err = json.Unmarshal(data, xw)
+	if err != nil {
+		return nil, err
+	}
+	return xw, nil
 }
 
 func main() {
