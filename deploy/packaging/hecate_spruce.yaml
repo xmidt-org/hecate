@@ -1,7 +1,7 @@
 ---
 # Unsure where server is used.
 # (Optional)
-server: (( grab $HOSTNAME || "tr1d1um" ))
+server: (( grab $HOSTNAME || "hecate" ))
 
 ########################################
 #   Labeling/Tracing via HTTP Headers Configuration
