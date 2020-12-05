@@ -35,11 +35,40 @@ cd deploy/docker-compose
 
 ### Insert a webhook through Tr1d1um
 
-curl http://localhost://TODO
+```bash
+curl --location --request POST 'http://localhost:6100/api/v2/hook' \
+--header 'Authorization: Basic dXNlcjpwYXNz' \
+--header 'Content-Type: application/json' \
+--data-raw '[{
+  "config": {
+    "url": "http://hecate-cluster-test/hook/ingest/0",
+    "content_type": "application/json",
+    "secret": "secretString"
+  },
+  "matcher": {
+    "device_id": [
+      "dontMatchMe"
+    ]
+  },
+  "events": [
+   "dontMatchMe"
+  ],
+  "duration": 3000,
+  "address": "http://hecate-test-cluster.net"
+}]'
+```
 
 ### Verify corresponding item exists in Argus
-curl https://localhost://TODO 
+
+```bash
+curl --location --request GET 'http://localhost:6600/api/v1/store/webhooks' \
+--header 'Authorization: Basic dXNlcjpwYXNz' \
+--header 'X-Midt-Owner: Argus' \
+--header 'Content-Type: application/json'
+```
 
 ### Verify list size of webhooks in Caduceus
-xmidt_caduceus_webhook_list_size should be 1
 
+Visit http://localhost:9090/graph?g0.expr=webpa_tr1d1um_webhook_list_size_value&g0.tab=1&g0.stacked=0&g0.range_input=1h&g1.expr=xmidt_caduceus_webhook_list_size_value&g1.tab=1&g1.stacked=0&g1.range_input=1h
+
+to verify that the webhook list size matches between Caduceus and Tr1d1um.
