@@ -4,10 +4,8 @@
 
 Hecate was a goddess in ancient Greek religion associated with crossroads. In XMiDT, Hecate is a tool to help transition webhook backends in XMiDT from AWS SNS to Argus.
 
-[![Build Status](https://travis-ci.com/xmidt-org/hecate.svg?branch=main)](https://travis-ci.com/xmidt-org/hecate)
+[![Build Status](https://github.com/xmidt-org/hecate/workflows/CI/badge.svg)](https://github.com/xmidt-org/hecate/actions)
 [![codecov.io](http://codecov.io/github/xmidt-org/hecate/coverage.svg?branch=main)](http://codecov.io/github/xmidt-org/hecate?branch=main)
-[![Code Climate](https://codeclimate.com/github/xmidt-org/hecate/badges/gpa.svg)](https://codeclimate.com/github/xmidt-org/hecate)
-[![Issue Count](https://codeclimate.com/github/xmidt-org/hecate/badges/issue_count.svg)](https://codeclimate.com/github/xmidt-org/hecate)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xmidt-org/hecate)](https://goreportcard.com/report/github.com/xmidt-org/hecate)
 [![Apache V2 License](http://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/xmidt-org/hecate/blob/main/LICENSE)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xmidt-org_hecate&metric=alert_status)](https://sonarcloud.io/dashboard?id=xmidt-org_PROJECT)
