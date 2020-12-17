@@ -12,7 +12,7 @@ Suppose we have a XMiDT cluster in which Tr1d1um servers are inserting webhooks 
 
 ## A simple Hecate cluster
 
-In this docker-compose cluster, we willl have:
+In this docker-compose cluster, we will have:
 
 - Caduceus: one server listening for webhook updates from Argus.
 - Tr1d1um: one server writing webhook registrations to SNS.
