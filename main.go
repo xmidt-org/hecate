@@ -114,15 +114,12 @@ func hecate(arguments []string) int {
 	}
 
 	signals := make(chan os.Signal, 10)
-	signal.Notify(signals)
+	signal.Notify(signals, os.Kill, os.Interrupt)
 	for exit := false; !exit; {
 		select {
 		case s := <-signals:
-			if s != os.Kill && s != os.Interrupt {
-			} else {
-				logging.Error(logger).Log(logging.MessageKey(), "exiting due to signal", "signal", s)
-				exit = true
-			}
+			logging.Error(logger).Log(logging.MessageKey(), "exiting due to signal", "signal", s)
+			exit = true
 		case <-done:
 			exit = true
 		}
