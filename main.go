@@ -1,27 +1,37 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"net/http"
 	_ "net/http/pprof"
 	"net/url"
 	"os"
-	"os/signal"
 	"runtime"
 	"time"
 
+	"github.com/InVisionApp/go-health"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/xmidt-org/arrange"
+	"github.com/xmidt-org/themis/config"
+	"github.com/xmidt-org/themis/xhealth"
+	"github.com/xmidt-org/themis/xhttp/xhttpserver"
+	"github.com/xmidt-org/themis/xlog"
+	"github.com/xmidt-org/themis/xlog/xloghttp"
+	"github.com/xmidt-org/themis/xmetrics/xmetricshttp"
+	"github.com/xmidt-org/webpa-common/webhook/aws"
+	"github.com/xmidt-org/webpa-common/xmetrics"
+	"go.uber.org/fx"
+
 	"github.com/go-kit/kit/log"
-	"github.com/goph/emperror"
+	"github.com/go-kit/kit/metrics/provider"
 	"github.com/gorilla/mux"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/xmidt-org/webpa-common/concurrent"
 	"github.com/xmidt-org/webpa-common/logging"
-	"github.com/xmidt-org/webpa-common/server"
 	"github.com/xmidt-org/webpa-common/webhook"
-	"github.com/xmidt-org/webpa-common/webhook/aws"
 	"github.com/xmidt-org/webpa-common/xwebhook"
 )
 
@@ -40,95 +50,151 @@ type Config struct {
 	Webhook xwebhook.Config
 }
 
-func hecate(arguments []string) int {
-	start := time.Now()
+func setupFlagSet(fs *pflag.FlagSet) error {
+	fs.StringP("file", "f", "", "the configuration file to use.  Overrides the search path.")
+	fs.BoolP("debug", "d", false, "enables debug logging.  Overrides configuration.")
+	fs.BoolP("version", "v", false, "print version and exit")
 
-	var (
-		f, v                                = pflag.NewFlagSet(applicationName, pflag.ContinueOnError), viper.New()
-		logger, metricsRegistry, codex, err = server.Initialize(applicationName, arguments, f, v, webhook.Metrics, aws.Metrics, xwebhook.Metrics)
+	return nil
+}
+
+func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
+	if printVersion, _ := fs.GetBool("version"); printVersion {
+		printVersionInfo()
+	}
+
+	if file, _ := fs.GetString("file"); len(file) > 0 {
+		v.SetConfigFile(file)
+		err = v.ReadInConfig()
+	} else {
+		v.SetConfigName(name)
+		v.AddConfigPath(fmt.Sprintf("/etc/%s", name))
+		v.AddConfigPath(fmt.Sprintf("$HOME/.%s", name))
+		v.AddConfigPath(".")
+		err = v.ReadInConfig()
+	}
+
+	if err != nil {
+		return
+	}
+
+	if debug, _ := fs.GetBool("debug"); debug {
+		v.Set("log.level", "DEBUG")
+	}
+
+	return nil
+}
+
+func main() {
+	// setup command line options and configuration from file
+	f := pflag.NewFlagSet(applicationName, pflag.ContinueOnError)
+	setupFlagSet(f)
+	v := viper.New()
+	err := setupViper(v, f, applicationName)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	app := fx.New(
+		xlog.Logger(),
+		arrange.ForViper(v),
+		fx.Supply(v),
+		webhook.ProvideMetrics(),
+		aws.ProvideMetrics(),
+		fx.Provide(
+			ProvideUnmarshaller,
+			xlog.Unmarshal("log"),
+			xloghttp.ProvideStandardBuilders,
+			xmetrics.NewRegistry,
+			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
+			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "servers.health", Optional: true}.Annotated(),
+			xhealth.Unmarshal("health"),
+			func(v *viper.Viper, logger log.Logger) (*Config, error) {
+				config := new(Config)
+				err := v.Unmarshal(config)
+				// TODO: What to do? This is a discard provider because we don't create providers in uber/fx style
+				config.Webhook.Argus.MetricsProvider = provider.NewDiscardProvider()
+				config.Webhook.Argus.Logger = logger
+				return config, err
+			},
+			webhook.NewFactory,
+			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
+				webhookRegistry, webhookHandler := factory.NewRegistryAndHandler(metrics)
+				lc.Append(fx.Hook{
+					OnStop: func(ctx context.Context) error {
+						close(webhookRegistry.Changes)
+						return nil
+					},
+				})
+
+				return webhookHandler
+			},
+			func(lc fx.Lifecycle, config *Config) (xwebhook.Service, error) {
+				svc, stopWatches, err := xwebhook.Initialize(&config.Webhook)
+
+				lc.Append(fx.Hook{
+					OnStop: func(ctx context.Context) error {
+						stopWatches()
+						return nil
+					},
+				})
+
+				return svc, err
+			},
+		),
+		fx.Invoke(
+			xhealth.ApplyChecks(
+				&health.Config{
+					Name:     applicationName,
+					Interval: 24 * time.Hour,
+					Checker: xhealth.NopCheckable{
+						Details: map[string]interface{}{
+							"StartTime": time.Now().UTC().Format(time.RFC3339),
+						},
+					},
+				},
+			),
+			func(factory *webhook.Factory, webhookHandler http.Handler, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
+				scheme := v.GetString("scheme")
+				if len(scheme) < 1 {
+					scheme = "https"
+				}
+
+				selfURL := &url.URL{
+					Scheme: scheme,
+					Host:   v.GetString("fqdn") + v.GetString("primary.address"),
+				}
+
+				rootRouter := mux.NewRouter()
+				factory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
+			},
+			func(webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
+				webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
+
+				// wait for DNS to propagate before subscribing to SNS
+				if err = webhookFactory.DnsReady(); err == nil {
+					logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
+					webhookFactory.PrepareAndStart()
+				} else {
+					logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
+						logging.ErrorKey(), err)
+				}
+			},
+		),
 	)
 
-	if parseErr, done := printVersion(f, arguments); done {
-		// if we're done, we're exiting no matter what
-		exitIfError(logger, emperror.Wrap(parseErr, "failed to parse arguments"))
-		os.Exit(0)
+	switch err := app.Err(); err {
+	case pflag.ErrHelp:
+		return
+	case nil:
+		app.Run()
+	default:
+		fmt.Println(err)
+		os.Exit(2)
 	}
-
-	// set everything up
-	config := new(Config)
-	err = v.Unmarshal(config)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating new webhook factory: %s\n", err)
-		return 1
-	}
-	exitIfError(logger, emperror.Wrap(err, "unable to initialize viper"))
-
-	webhookFactory, err := webhook.NewFactory(v)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating new webhook factory: %s\n", err)
-		return 1
-	}
-	webhookRegistry, webhookHandler := webhookFactory.NewRegistryAndHandler(metricsRegistry)
-
-	scheme := v.GetString("scheme")
-	if len(scheme) < 1 {
-		scheme = "https"
-	}
-
-	selfURL := &url.URL{
-		Scheme: scheme,
-		Host:   v.GetString("fqdn") + v.GetString("primary.address"),
-	}
-
-	rootRouter := mux.NewRouter()
-	webhookFactory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, metricsRegistry, time.Now)
-
-	config.Webhook.Argus.MetricsProvider = metricsRegistry
-	config.Webhook.Argus.Logger = logger
-	svc, stopWatches, err := xwebhook.Initialize(&config.Webhook)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing xwebhook %s\n", err)
-		return 1
-	}
-	defer stopWatches()
-
-	logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName), "elapsedTime", time.Since(start))
-
-	// The actual logic
-	_, runnable, done := codex.Prepare(logger, nil, metricsRegistry, rootRouter)
-
-	waitGroup, shutdown, err := concurrent.Execute(runnable)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to start device manager: %s\n", err)
-		return 1
-	}
-	webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
-
-	// wait for DNS to propagate before subscribing to SNS
-	if err = webhookFactory.DnsReady(); err == nil {
-		logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
-		webhookFactory.PrepareAndStart()
-	} else {
-		logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
-			logging.ErrorKey(), err)
-	}
-
-	signals := make(chan os.Signal, 10)
-	signal.Notify(signals, os.Kill, os.Interrupt)
-	for exit := false; !exit; {
-		select {
-		case s := <-signals:
-			logging.Error(logger).Log(logging.MessageKey(), "exiting due to signal", "signal", s)
-			exit = true
-		case <-done:
-			exit = true
-		}
-	}
-	close(shutdown)
-	close(webhookRegistry.Changes)
-	waitGroup.Wait()
-
-	return 0
 }
 
 func createArgusSynchronizer(svc xwebhook.Service, logger log.Logger) func([]webhook.W) {
@@ -150,36 +216,13 @@ func createArgusSynchronizer(svc xwebhook.Service, logger log.Logger) func([]web
 	}
 }
 
-func printVersion(f *pflag.FlagSet, arguments []string) (error, bool) {
-	printVer := f.BoolP("version", "v", false, "displays the version number")
-	if err := f.Parse(arguments); err != nil {
-		return err, true
-	}
-
-	if *printVer {
-		printVersionInfo(os.Stdout)
-		return nil, true
-	}
-	return nil, false
-}
-
-func printVersionInfo(writer io.Writer) {
-	fmt.Fprintf(writer, "%s:\n", applicationName)
-	fmt.Fprintf(writer, "  version: \t%s\n", Version)
-	fmt.Fprintf(writer, "  go version: \t%s\n", runtime.Version())
-	fmt.Fprintf(writer, "  built time: \t%s\n", BuildTime)
-	fmt.Fprintf(writer, "  git commit: \t%s\n", GitCommit)
-	fmt.Fprintf(writer, "  os/arch: \t%s/%s\n", runtime.GOOS, runtime.GOARCH)
-}
-
-func exitIfError(logger log.Logger, err error) {
-	if err != nil {
-		if logger != nil {
-			logging.Error(logger, emperror.Context(err)...).Log(logging.ErrorKey(), err.Error())
-		}
-		fmt.Fprintf(os.Stderr, "Error: %#v\n", err.Error())
-		os.Exit(1)
-	}
+func printVersionInfo() {
+	fmt.Fprintf(os.Stdout, "%s:\n", applicationName)
+	fmt.Fprintf(os.Stdout, "  version: \t%s\n", Version)
+	fmt.Fprintf(os.Stdout, "  go version: \t%s\n", runtime.Version())
+	fmt.Fprintf(os.Stdout, "  built time: \t%s\n", BuildTime)
+	fmt.Fprintf(os.Stdout, "  git commit: \t%s\n", GitCommit)
+	fmt.Fprintf(os.Stdout, "  os/arch: \t%s/%s\n", runtime.GOOS, runtime.GOARCH)
 }
 
 func toNewWebhook(w *webhook.W) (*xwebhook.Webhook, error) {
@@ -195,6 +238,14 @@ func toNewWebhook(w *webhook.W) (*xwebhook.Webhook, error) {
 	return xw, nil
 }
 
-func main() {
-	os.Exit(hecate(os.Args))
+// TODO: once we get rid of any packages that need an unmarshaller, remove this.
+type UnmarshallerOut struct {
+	fx.Out
+	Unmarshaller config.Unmarshaller
+}
+
+func ProvideUnmarshaller(v *viper.Viper) UnmarshallerOut {
+	return UnmarshallerOut{
+		Unmarshaller: config.ViperUnmarshaller{Viper: v, Options: []viper.DecoderConfigOption{}},
+	}
 }
