@@ -6,7 +6,7 @@ require (
 	github.com/InVisionApp/go-health v2.1.0+incompatible
 	github.com/go-kit/kit v0.10.0
 	github.com/google/go-cmp v0.5.2 // indirect
-	github.com/goph/emperror v0.17.3-0.20190703203600-60a8d9faa17b
+	github.com/goph/emperror v0.17.3-0.20190703203600-60a8d9faa17b // indirect
 	github.com/gorilla/mux v1.7.4
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
@@ -17,7 +17,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
 	github.com/xmidt-org/argus v0.3.10-0.20201105190057-402fede05764 // indirect
-	github.com/xmidt-org/arrange v0.1.9
+	github.com/xmidt-org/arrange v0.1.9 // indirect
 	github.com/xmidt-org/themis v0.4.4
 	github.com/xmidt-org/webpa-common v1.11.3-0.20201105204455-14089f28c2e7
 	go.uber.org/fx v1.13.0
@@ -30,4 +30,4 @@ require (
 	golang.org/x/tools v0.0.0-20200513154647-78b527d18275 // indirect
 )
 
-replace github.com/xmidt-org/webpa-common v1.11.3-0.20201105204455-14089f28c2e7 => github.com/j-mai/webpa-common v1.11.2-0.20201221221413-89ccec9116d6
+replace github.com/xmidt-org/webpa-common v1.11.3-0.20201105204455-14089f28c2e7 => github.com/j-mai/webpa-common v1.11.2-0.20201222175320-de0b14253c6e

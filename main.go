@@ -13,7 +13,6 @@ import (
 
 	"github.com/InVisionApp/go-health"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/xmidt-org/arrange"
 	"github.com/xmidt-org/themis/config"
 	"github.com/xmidt-org/themis/xhealth"
 	"github.com/xmidt-org/themis/xhttp/xhttpserver"
@@ -98,7 +97,6 @@ func main() {
 
 	app := fx.New(
 		xlog.Logger(),
-		arrange.ForViper(v),
 		fx.Supply(v),
 		webhook.ProvideMetrics(),
 		aws.ProvideMetrics(),
@@ -108,9 +106,6 @@ func main() {
 			xloghttp.ProvideStandardBuilders,
 			xmetrics.NewRegistry,
 			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
-			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
-			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
-			xhttpserver.Unmarshal{Key: "servers.health", Optional: true}.Annotated(),
 			xhealth.Unmarshal("health"),
 			func(v *viper.Viper, logger log.Logger) (*Config, error) {
 				config := new(Config)
@@ -122,7 +117,7 @@ func main() {
 			},
 			webhook.NewFactory,
 			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
-				webhookRegistry, webhookHandler := factory.NewRegistryAndHandler(metrics)
+				webhookRegistry, webhookHandler := factory.NewRegistryAndHandler(&metrics)
 				lc.Append(fx.Hook{
 					OnStop: func(ctx context.Context) error {
 						close(webhookRegistry.Changes)
@@ -144,6 +139,10 @@ func main() {
 
 				return svc, err
 			},
+			xhttpserver.Unmarshal{Key: "primary", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "metric", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "health", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "pprof", Optional: true}.Annotated(),
 		),
 		fx.Invoke(
 			xhealth.ApplyChecks(
@@ -169,7 +168,7 @@ func main() {
 				}
 
 				rootRouter := mux.NewRouter()
-				factory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
+				factory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, &awsMetrics, time.Now)
 			},
 			func(webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
 				webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
@@ -236,6 +235,16 @@ func toNewWebhook(w *webhook.W) (*xwebhook.Webhook, error) {
 		return nil, err
 	}
 	return xw, nil
+}
+
+func ApplyMetricsData(awsMetrics aws.AWSMetrics, webhookMetrics webhook.WebhookMetrics) {
+	webhookMetrics.ListSize.Add(0.0)
+	webhookMetrics.NotificationUnmarshallFailed.Add(0.0)
+
+	awsMetrics.DnsReadyQueryCount.Add(0.0)
+	awsMetrics.DnsReady.Add(0.0)
+	awsMetrics.SNSNotificationSent.Add(0.0)
+	awsMetrics.SNSSubscribed.Add(0.0)
 }
 
 // TODO: once we get rid of any packages that need an unmarshaller, remove this.

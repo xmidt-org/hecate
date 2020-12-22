@@ -26,7 +26,7 @@ FROM alpine:3.12.1
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /src/hecate /src/hecate.yaml /src/deploy/packaging/entrypoint.sh /go/bin/spruce /src/Dockerfile /src/NOTICE /src/LICENSE /src/CHANGELOG.md /
-COPY --from=builder /src/deploy/packaging/hecate.yaml /tmp/hecate.yaml
+COPY --from=builder /src/deploy/packaging/hecate_spruce.yaml /tmp/hecate.yaml
 
 RUN mkdir /etc/hecate/ && touch /etc/hecate/hecate.yaml && chmod 666 /etc/hecate/hecate.yaml
 

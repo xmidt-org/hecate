@@ -312,6 +312,12 @@ github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab h1:HqW
 github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab/go.mod h1:qj24IKcXYK6Iy9ceXlo3Tc+vtHo9lIhSX5JddghvEPo=
 github.com/j-mai/webpa-common v1.11.2-0.20201221221413-89ccec9116d6 h1:/nlLtP1eXDw3YV6sGjMJSzw4y4XYTikFTtnnx2jQ084=
 github.com/j-mai/webpa-common v1.11.2-0.20201221221413-89ccec9116d6/go.mod h1:ffQHH+pCRnoxtdbyIkCbOSDVhV62X47UA64fugPyu30=
+github.com/j-mai/webpa-common v1.11.2-0.20201222000801-c3381ce68e97 h1:RGSmjKnjsaA/KC6QroGrPucf9psC0RUtJmjs22F/rbg=
+github.com/j-mai/webpa-common v1.11.2-0.20201222000801-c3381ce68e97/go.mod h1:ffQHH+pCRnoxtdbyIkCbOSDVhV62X47UA64fugPyu30=
+github.com/j-mai/webpa-common v1.11.2-0.20201222001401-ee98addbcf22 h1:FTa0D2YbPlwlfSqJM4uaKxYQ5jb3P8Gb3oPh+dHI584=
+github.com/j-mai/webpa-common v1.11.2-0.20201222001401-ee98addbcf22/go.mod h1:ffQHH+pCRnoxtdbyIkCbOSDVhV62X47UA64fugPyu30=
+github.com/j-mai/webpa-common v1.11.2-0.20201222175320-de0b14253c6e h1:CUnIBMnEkdAR9K4EIipWx+YBduQJh4hDnXF+bnKBySc=
+github.com/j-mai/webpa-common v1.11.2-0.20201222175320-de0b14253c6e/go.mod h1:ffQHH+pCRnoxtdbyIkCbOSDVhV62X47UA64fugPyu30=
 github.com/jarcoal/httpmock v0.0.0-20180424175123-9c70cfe4a1da/go.mod h1:ks+b9deReOc7jgqp+e7LuFiCBH6Rm5hL32cLcEAArb4=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/jmespath/go-jmespath v0.3.0 h1:OS12ieG61fsCg5+qLJ+SsW9NicxNkg3b25OyT2yCeUc=

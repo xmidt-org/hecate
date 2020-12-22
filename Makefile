@@ -40,6 +40,14 @@ docker:
 	-$(DOCKER) rmi "$(APP):latest"
 	$(DOCKER) build -t "$(APP):$(VERSION)" -t "$(APP):latest" .
 
+.PHONY: local-docker
+local-docker: vendor
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GITCOMMIT=$(GITCOMMIT) \
+		--build-arg BUILDTIME='$(BUILDTIME)' \
+		-f ./Dockerfile -t $(DOCKER_ORG)/$(APP):local .
+
 binaries: generate
 	mkdir -p ./.ignore
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -o ./.ignore/$(APP)-$(PROGVER).darwin-amd64 -ldflags "-X 'main.BuildTime=$(BUILDTIME)' -X main.GitCommit=$(GITCOMMIT) -X main.Version=$(VERSION)"
