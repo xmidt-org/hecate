@@ -41,7 +41,7 @@ docker:
 	$(DOCKER) build -t "$(APP):$(VERSION)" -t "$(APP):latest" .
 
 .PHONY: local-docker
-local-docker: vendor
+local-docker:
 	docker build \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GITCOMMIT=$(GITCOMMIT) \

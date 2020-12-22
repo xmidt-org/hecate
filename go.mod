@@ -30,4 +30,6 @@ require (
 	golang.org/x/tools v0.0.0-20200513154647-78b527d18275 // indirect
 )
 
-replace github.com/xmidt-org/webpa-common v1.11.3-0.20201105204455-14089f28c2e7 => github.com/j-mai/webpa-common v1.11.2-0.20201222175320-de0b14253c6e
+replace github.com/xmidt-org/webpa-common v1.11.3-0.20201105204455-14089f28c2e7 => github.com/j-mai/webpa-common v1.11.2-0.20201222210514-49e627b4d695
+
+//replace github.com/xmidt-org/webpa-common v1.11.3-0.20201105204455-14089f28c2e7 => github.com/j-mai/webpa-common v1.11.2-0.20201222175320-de0b14253c6e

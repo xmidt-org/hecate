@@ -117,7 +117,7 @@ func main() {
 			},
 			webhook.NewFactory,
 			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
-				webhookRegistry, webhookHandler := factory.NewRegistryAndHandler(&metrics)
+				webhookRegistry, webhookHandler := factory.NewRegistryAndHandler(metrics)
 				lc.Append(fx.Hook{
 					OnStop: func(ctx context.Context) error {
 						close(webhookRegistry.Changes)
@@ -139,6 +139,7 @@ func main() {
 
 				return svc, err
 			},
+			mux.NewRouter,
 			xhttpserver.Unmarshal{Key: "primary", Optional: true}.Annotated(),
 			xhttpserver.Unmarshal{Key: "metric", Optional: true}.Annotated(),
 			xhttpserver.Unmarshal{Key: "health", Optional: true}.Annotated(),
@@ -156,7 +157,7 @@ func main() {
 					},
 				},
 			),
-			func(factory *webhook.Factory, webhookHandler http.Handler, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
+			func(factory *webhook.Factory, webhookHandler http.Handler, rootRouter *mux.Router, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
 				scheme := v.GetString("scheme")
 				if len(scheme) < 1 {
 					scheme = "https"
@@ -167,8 +168,7 @@ func main() {
 					Host:   v.GetString("fqdn") + v.GetString("primary.address"),
 				}
 
-				rootRouter := mux.NewRouter()
-				factory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, &awsMetrics, time.Now)
+				factory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 			},
 			func(webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
 				webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
