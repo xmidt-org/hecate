@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	applicationName, apiBase = "hecate", "/api/v1"
-	DEFAULT_KEY_ID           = "current"
+	applicationName = "hecate"
+	DEFAULT_KEY_ID  = "current"
 )
 
 var (
@@ -47,6 +47,11 @@ var (
 
 type Config struct {
 	Webhook xwebhook.Config
+}
+
+type PrimaryRouter struct {
+	fx.In
+	Router *mux.Router `name:"primary"`
 }
 
 func setupFlagSet(fs *pflag.FlagSet) error {
@@ -139,11 +144,7 @@ func main() {
 
 				return svc, err
 			},
-			mux.NewRouter,
 			xhttpserver.Unmarshal{Key: "primary", Optional: true}.Annotated(),
-			xhttpserver.Unmarshal{Key: "metric", Optional: true}.Annotated(),
-			xhttpserver.Unmarshal{Key: "health", Optional: true}.Annotated(),
-			xhttpserver.Unmarshal{Key: "pprof", Optional: true}.Annotated(),
 		),
 		fx.Invoke(
 			xhealth.ApplyChecks(
@@ -157,7 +158,7 @@ func main() {
 					},
 				},
 			),
-			func(factory *webhook.Factory, webhookHandler http.Handler, rootRouter *mux.Router, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
+			func(factory *webhook.Factory, webhookHandler http.Handler, primaryRouter PrimaryRouter, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
 				scheme := v.GetString("scheme")
 				if len(scheme) < 1 {
 					scheme = "https"
@@ -168,7 +169,7 @@ func main() {
 					Host:   v.GetString("fqdn") + v.GetString("primary.address"),
 				}
 
-				factory.Initialize(rootRouter, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
+				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 			},
 			func(webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
 				webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
