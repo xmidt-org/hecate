@@ -169,15 +169,12 @@ func main() {
 					Host:   v.GetString("fqdn") + v.GetString("primary.address"),
 				}
 
-				fmt.Println("initialize")
-
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 			},
 			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
+				webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
-						fmt.Println("start")
-						webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
 						// wait for DNS to propagate before subscribing to SNS
 						if err = webhookFactory.DnsReady(); err == nil {
 							logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
