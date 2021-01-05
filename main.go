@@ -169,9 +169,9 @@ func main() {
 					Host:   v.GetString("fqdn") + v.GetString("primary.address"),
 				}
 
-				logging.Info(logger).Log(logging.MessageKey(), "ABOUT TO INITIALIZE")
-
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
+				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
+
 			},
 			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
 				lc.Append(fx.Hook{
