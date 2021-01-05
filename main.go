@@ -169,19 +169,28 @@ func main() {
 					Host:   v.GetString("fqdn") + v.GetString("primary.address"),
 				}
 
+				fmt.Println("initialize")
+
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 			},
-			func(webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
-				webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
+			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
+				lc.Append(fx.Hook{
+					OnStart: func(context.Context) error {
+						fmt.Println("start")
+						webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
+						// wait for DNS to propagate before subscribing to SNS
+						if err = webhookFactory.DnsReady(); err == nil {
+							logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
+							webhookFactory.PrepareAndStart()
+							return nil
+						} else {
+							logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
+								logging.ErrorKey(), err)
+							return err
+						}
+					},
+				})
 
-				// wait for DNS to propagate before subscribing to SNS
-				if err = webhookFactory.DnsReady(); err == nil {
-					logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
-					webhookFactory.PrepareAndStart()
-				} else {
-					logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
-						logging.ErrorKey(), err)
-				}
 			},
 		),
 	)
