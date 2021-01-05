@@ -9,7 +9,6 @@ services:
       - 6703:6703
     depends_on:
       - caduceus
-      - tr1d1um
     volumes:
       - ./docFiles/hecate.yaml:/etc/hecate/hecate.yaml
     networks:
