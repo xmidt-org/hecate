@@ -1,0 +1,17 @@
+[Unit]
+Description=The SNS to Argus webhook-backend migration tool.
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+PIDFile=/run/hecate.pid
+ExecStartPre=/usr/bin/rm -f /run/hecate.pid
+ExecStart=/usr/bin/hecate
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutStopSec=10
+KillMode=process
+PrivateTmp=true
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
