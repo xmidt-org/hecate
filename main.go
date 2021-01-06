@@ -158,7 +158,7 @@ func main() {
 					},
 				},
 			),
-			func(factory *webhook.Factory, webhookHandler http.Handler, primaryRouter PrimaryRouter, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
+			func(lc fx.Lifecycle, factory *webhook.Factory, webhookHandler http.Handler, primaryRouter PrimaryRouter, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
 				scheme := v.GetString("scheme")
 				if len(scheme) < 1 {
 					scheme = "https"
@@ -171,16 +171,15 @@ func main() {
 
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
-
 			},
 			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, svc xwebhook.Service, logger log.Logger) {
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
-						logging.Info(logger).Log(logging.MessageKey(), "INSIDE START")
 						webhookFactory.SetExternalUpdate(createArgusSynchronizer(svc, logger))
 						// wait for DNS to propagate before subscribing to SNS
 						if err = webhookFactory.DnsReady(); err == nil {
 							logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
+							time.Sleep(time.Second * 5)
 							webhookFactory.PrepareAndStart()
 							return nil
 						} else {
