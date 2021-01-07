@@ -2,10 +2,10 @@ AWS_ACCESS_KEY_ID=accessKey AWS_SECRET_ACCESS_KEY=secretKey aws dynamodb  --endp
     --table-name gifnoc \
     --attribute-definitions \
         AttributeName=bucket,AttributeType=S \
-        AttributeName=uuid,AttributeType=S \
+        AttributeName=id,AttributeType=S \
     --key-schema \
         AttributeName=bucket,KeyType=HASH \
-        AttributeName=uuid,KeyType=RANGE \
+        AttributeName=id,KeyType=RANGE \
     --provisioned-throughput \
         ReadCapacityUnits=10,WriteCapacityUnits=5 \
     --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES \

@@ -38,15 +38,7 @@ release: build
 docker:
 	-$(DOCKER) rmi "$(APP):$(VERSION)"
 	-$(DOCKER) rmi "$(APP):latest"
-	$(DOCKER) build -t "$(APP):$(VERSION)" -t "$(APP):latest" .
-
-.PHONY: local-docker
-local-docker:
-	docker build \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GITCOMMIT=$(GITCOMMIT) \
-		--build-arg BUILDTIME='$(BUILDTIME)' \
-		-f ./deploy/Dockerfile -t $(DOCKER_ORG)/$(APP):local .
+	$(DOCKER) build -t "$(DOCKER_ORG)/$(APP):$(VERSION)" -t "$(DOCKER_ORG)/$(APP):latest" .
 
 binaries: generate
 	mkdir -p ./.ignore
