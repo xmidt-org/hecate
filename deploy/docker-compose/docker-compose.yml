@@ -1,4 +1,4 @@
-version: '3.4'
+version: "3.4"
 services:
   hecate:
     image: xmidt/hecate:${HECATE_VERSION}
@@ -59,7 +59,7 @@ services:
       - 9090:9090
     volumes:
       - ./docFiles/prometheus.yml:/prometheus-data/prometheus.yml
-    command:  --log.level=debug --config.file=/prometheus-data/prometheus.yml
+    command: --log.level=debug --config.file=/prometheus-data/prometheus.yml
 
   argus:
     image: xmidt/argus:${ARGUS_VERSION}

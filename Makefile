@@ -38,7 +38,7 @@ release: build
 docker:
 	-$(DOCKER) rmi "$(APP):$(VERSION)"
 	-$(DOCKER) rmi "$(APP):latest"
-	$(DOCKER) build -t "$(APP):$(VERSION)" -t "$(APP):latest" .
+	$(DOCKER) build -t "$(DOCKER_ORG)/$(APP):$(VERSION)" -t "$(DOCKER_ORG)/$(APP):latest" .
 
 binaries: generate
 	mkdir -p ./.ignore

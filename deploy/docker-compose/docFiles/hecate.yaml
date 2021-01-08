@@ -18,7 +18,7 @@ log:
   level: "DEBUG"
   json: false
 
-scheme: http  
+scheme: http
 aws:
   accessKey: "supbro"
   secretKey: "nahbro"
@@ -29,11 +29,10 @@ aws:
     topicArn: arn:aws:sns:us-east-1:000000000000:xmidt-local-caduceus
     urlPath: "/api/v2/aws/sns"
 
-webhook:
-  argus: 
-    bucket: "webhooks"
-    pullInterval: 5s
-    adminToken: Hzu1WpIe7S8G 
-    address: "http://argus:6600"
-    auth:
-      basic: "Basic dXNlcjpwYXNz"
+argus:
+  bucket: "webhooks"
+  pullInterval: 5s
+  adminToken: Hzu1WpIe7S8G
+  address: "http://argus:6600"
+  auth:
+    basic: "Basic dXNlcjpwYXNz"
