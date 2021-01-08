@@ -251,16 +251,6 @@ func printVersionInfo() {
 	fmt.Fprintf(os.Stdout, "  os/arch: \t%s/%s\n", runtime.GOOS, runtime.GOARCH)
 }
 
-func ApplyMetricsData(awsMetrics aws.AWSMetrics, webhookMetrics webhook.WebhookMetrics) {
-	webhookMetrics.ListSize.Add(0.0)
-	webhookMetrics.NotificationUnmarshallFailed.Add(0.0)
-
-	awsMetrics.DnsReadyQueryCount.Add(0.0)
-	awsMetrics.DnsReady.Add(0.0)
-	awsMetrics.SNSNotificationSent.Add(0.0)
-	awsMetrics.SNSSubscribed.Add(0.0)
-}
-
 // TODO: once we get rid of any packages that need an unmarshaller, remove this.
 type UnmarshallerOut struct {
 	fx.Out

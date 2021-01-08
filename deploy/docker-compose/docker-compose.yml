@@ -9,7 +9,7 @@ services:
       - 6703:6703
     depends_on:
       - caduceus
-      - goaws
+      - tr1d1um
     volumes:
       - ./docFiles/hecate.yaml:/etc/hecate/hecate.yaml
     networks:
@@ -36,7 +36,7 @@ services:
       - 6101:6101
       - 6102:6102
     depends_on:
-      - hecate
+      - goaws
     volumes:
       - ./docFiles/tr1d1um.yaml:/etc/tr1d1um/tr1d1um.yaml
     networks:
