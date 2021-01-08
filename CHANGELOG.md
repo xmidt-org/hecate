@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 - Use UberFx [#20](https://github.com/xmidt-org/hecate/pull/20)
 
+### Fixed
+- Add missing systemd config. [#19](https://github.com/xmidt-org/hecate/pull/19)
+
 ## [v0.1.0]
 - Migrate to github actions, normalize analysis tools, Dockerfiles and Makefiles. [#3](https://github.com/xmidt-org/hecate/pull/3)
 - Add docker integration. [#7](https://github.com/xmidt-org/hecate/pull/7)
