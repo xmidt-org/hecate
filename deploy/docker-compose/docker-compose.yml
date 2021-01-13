@@ -1,44 +1,38 @@
-version: "3.4"
+version: '3.8'
 services:
-  hecate:
-    image: xmidt/hecate:${HECATE_VERSION}
-    ports:
-      - 6700:6700
-      - 6701:6701
-      - 6702:6702
-      - 6703:6703
-    depends_on:
-      - caduceus
-      - tr1d1um
-    volumes:
-      - ./docFiles/hecate.yaml:/etc/hecate/hecate.yaml
-    networks:
-      - xmidt
-
   caduceus:
     image: xmidt/caduceus:${CADUCEUS_VERSION}
     ports:
-      - 6000:6000
-      - 6001:6001
-      - 6002:6002
-      - 6003:6003
+      - "6000-6003:6000-6003"
     depends_on:
       - argus
-    volumes:
-      - ./docFiles/caduceus.yaml:/etc/caduceus/caduceus.yaml
+      - hecate
     networks:
       - xmidt
 
   tr1d1um:
     image: xmidt/tr1d1um:${TR1D1UM_VERSION}
     ports:
-      - 6100:6100
-      - 6101:6101
-      - 6102:6102
+      - "6100-6103:6100-6103"
     depends_on:
       - goaws
     volumes:
       - ./docFiles/tr1d1um.yaml:/etc/tr1d1um/tr1d1um.yaml
+    networks:
+      - xmidt
+
+  hecate:
+    image: xmidt/hecate:${HECATE_VERSION}
+    ports:
+      - 6700-6703:6700-6703
+    depends_on:
+      - tr1d1um
+    environment:
+      - "AWS_ENDPOINT=http://goaws:4100"
+      - "AWS_SECRET_KEY=supbro"
+      - "AWS_ACCESS_KEY=nahbro"
+      - "LOG_LEVEL=DEBUG"
+      - "DISABLE_SNS_TLS=true"
     networks:
       - xmidt
 
@@ -63,14 +57,13 @@ services:
 
   argus:
     image: xmidt/argus:${ARGUS_VERSION}
+    environment:
+      - "AWS_ENDPOINT=http://dynamodb:8000"
+      - "LOG_LEVEL=DEBUG"
     ports:
-      - 6600:6600
-      - 6601:6601
-      - 6602:6602
+      - "6600-6603:6600-6603"
     depends_on:
       - dynamodb
-    volumes:
-      - ./docFiles/argus.yaml:/etc/argus/argus.yaml
     networks:
       - xmidt
 

@@ -1,10 +1,46 @@
 ---
-# Unsure where server is used.
-# (Optional)
-server: "hecate-instance-123.example.com"
+########################################
+#   servers
+########################################
+servers:
+  primary:
+    address: :6700
+    disableHTTPKeepAlives: true
+    header:
+      X-Midt-Server:
+        - hecate
+      X-Midt-Version:
+        - development
+
+  metrics:
+    address: :6701
+    disableHTTPKeepAlives: true
+    header:
+      X-Midt-Server:
+        - hecate
+      X-Midt-Version:
+        - development
+
+  health:
+    address: :6702
+    disableHTTPKeepAlives: true
+    header:
+      X-Midt-Server:
+        - hecate
+      X-Midt-Version:
+        - development
+
+prometheus:
+  defaultNamespace: xmidt
+  defaultSubsystem: hecate
+
+health:
+  disableLogging: false
+  custom:
+    server: server 
 
 ########################################
-#   Labeling/Tracing via HTTP Headers Configuration
+#   labeling/tracing via http headers configuration
 ########################################
 
 # Provides this build number to the X-transition-Build header for
@@ -28,94 +64,6 @@ flavor: mint
 # stage is used for doing complex spruce manipulation
 # change this will only effect spruce and the vars referencing it
 stage: dev
-
-########################################
-#   primary endpoint Configuration
-########################################
-
-# primary defines the details needed for the primary endpoint.  The
-# primary endpoint accepts the events from talaria (typically).
-primary:
-  # address provides the port number for the endpoint to bind to.
-  # ":443" is ideal, but may require some special handling due to it being
-  # a reserved (by the kernel) port.
-  address: ":6700"
-  # HTTPS/TLS
-  #
-  # certificateFile provides the public key and CA chain in PEM format if
-  # TLS is used.  Note: the certificate needs to match the fqdn for clients
-  # to accept without issue.
-  #
-  # keyFile provides the private key that matches the certificateFile
-  # (Optional)
-  # certificateFile: "/etc/transition/public.pem"
-  # keyFile: "/etc/transition/private.pem"
-
-########################################
-#   health endpoint Configuration
-########################################
-
-# health defines the details needed for the health check endpoint.  The
-# health check endpoint is generally used by services (like AWS Route53
-# or consul) to determine if this particular machine is healthy or not.
-health:
-  # address provides the port number for the endpoint to bind to.
-  # ":80" is ideal, but may require some special handling due to it being
-  # a reserved (by the kernel) port.
-  address: ":6701"
-
-  # logInterval appears to be present from before we had formal metrics
-  # (Deprecated)
-  # logInterval: "60s"
-  # options appears to be present from before we had formal metrics
-  # (Deprecated)
-  # options:
-  #  - "PayloadsOverZero"
-  #  - "PayloadsOverHundred"
-  #  - "PayloadsOverThousand"
-  #  - "PayloadsOverTenThousand"
-
-########################################
-#   Debugging/pprof Configuration
-########################################
-
-# pprof defines the details needed for the pprof debug endpoint.
-# (Optional)
-pprof:
-  # address provides the port number for the endpoint to bind to.
-  address: ":6702"
-
-########################################
-#   Metrics Configuration
-########################################
-
-# metric defines the details needed for the prometheus metrics endpoint
-# (Optional)
-metric:
-  # address provides the port number for the endpoint to bind to.  Port 9389
-  # was chosen because it does not conflict with any of the other prometheus
-  # metrics or other machines in the xmidt cluster.  You may use any port you
-  # wish.
-  address: ":6703"
-
-  # metricsOptions provides the details needed to configure the prometheus
-  # metric data.  Metrics generally have the form:
-  #
-  # {namespace}_{subsystem}_{metric}
-  #
-  # so if you use the suggested value below, your metrics are prefixed like
-  # this:
-  #
-  # xmidt_transition_{metric}
-  #
-  # (Optional)
-  metricsOptions:
-    # namespace is the namespace of the metrics provided
-    # (Optional)
-    namespace: "xmidt"
-    # subsystem is the subsystem of the metrics provided
-    # (Optional)
-    subsystem: "hecate"
 
 ########################################
 #   Logging Related Configuration
@@ -155,10 +103,14 @@ log:
 # The unique fully-qualified-domain-name of the server.  The webhooks library uses it
 # to know which host to use to confirm this service is ready to receive events
 # (Optional if not running webhooks)
-fqdn: "tr1d1um-local-instance-123.example.com"
+fqdn: "localhost"
 
-# start contains configuration for the logic by which Tr1d1um can
-# fetch the current WebPA webhooks without having to wait for SNS
+# If set to true, message exchange with SNS over HTTP is done without TLS.
+disableSnsTls: false
+
+# The s
+# start contains configuration for the logic by which this service can
+# fetch the current webhooks without having to wait for SNS
 # It does so by pinging the rest of the cluter at the specified apiPath
 # More details at https://godoc.org/github.com/xmidt-org/webpa-common/webhook#StartConfig
 start:
@@ -167,6 +119,7 @@ start:
 
   # path used to query the existing webhooks
   apiPath: http://localhost:6100/hooks
+
 
 ########################################
 # SNS - Webhooks DNS readiness Configuration
@@ -179,7 +132,7 @@ waitForDns: "30s"
 #soa stands for Start of Authority and it's a type of record in a DNS
 soa:
   # provider is the SOA provider used to verify DNS record readiness of this service
-  provider: "example-123.awsdns-00.com:17"
+  # provider: "example-123.awsdns-00.com:17"
 
 ########################################
 # SNS - Webhooks AWS Configuration
@@ -198,7 +151,7 @@ aws:
   sns:
     # awsEndpoint is the AWS endpoint
     # this must be left out in produ
-    awsEndpoint: http://goaws:4100
+    awsEndpoint: http://localhost:4100
 
     #region is the AWS SNS region
     region: "us-east-1"
@@ -208,6 +161,7 @@ aws:
 
     #urlPath is the URL path SNS will use to confirm a subscription with this server
     urlPath: "/api/v2/aws/sns"
+
 
 ########################################
 # Argus - Webhooks Config
