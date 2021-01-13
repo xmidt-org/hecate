@@ -177,9 +177,6 @@ func main() {
 								logging.ErrorKey(), err)
 							return err
 						}
-						//TODO: If we know with certainty this is a docker-compose specific hack, we could add a delay elsewhere or
-						//only run this case when running from our test cluster?
-						time.Sleep(time.Second * 2)
 						logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
 						webhookFactory.PrepareAndStart()
 						return nil
