@@ -37,20 +37,18 @@ import (
 	"github.com/xmidt-org/webpa-common/webhook"
 )
 
-const (
-	applicationName = "hecate"
-	DEFAULT_KEY_ID  = "current"
-)
+const applicationName = "hecate"
 
+// Variables with values provided at build time through ldflags (see Makefile for details)
 var (
 	GitCommit = "undefined"
 	Version   = "undefined"
 	BuildTime = "undefined"
 )
 
-type PrimaryRouter struct {
+type primaryRouter struct {
 	fx.In
-	Router *mux.Router `name:"primary"`
+	Router *mux.Router `name:"servers.primary"`
 }
 
 func setupFlagSet(fs *pflag.FlagSet) error {
@@ -105,7 +103,7 @@ func main() {
 		webhook.ProvideMetrics(),
 		aws.ProvideMetrics(),
 		fx.Provide(
-			ProvideUnmarshaller,
+			provideUnmarshaller,
 			xlog.Unmarshal("log"),
 			xloghttp.ProvideStandardBuilders,
 			xmetrics.NewRegistry,
@@ -135,7 +133,10 @@ func main() {
 			func(config *chrysom.ClientConfig) (*chrysom.Client, error) {
 				return chrysom.CreateClient(*config)
 			},
-			xhttpserver.Unmarshal{Key: "primary"}.Annotated(),
+			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "servers.health", Optional: true}.Annotated(),
+			xhttpserver.Unmarshal{Key: "servers.pprof", Optional: true}.Annotated(),
 		),
 		fx.Invoke(
 			xhealth.ApplyChecks(
@@ -149,15 +150,18 @@ func main() {
 					},
 				},
 			),
-			func(lc fx.Lifecycle, factory *webhook.Factory, webhookHandler http.Handler, primaryRouter PrimaryRouter, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
-				scheme := v.GetString("scheme")
-				if len(scheme) < 1 {
-					scheme = "https"
+			buildHealthRoutes,
+			buildMetricsRoutes,
+			buildPprofRoutes,
+			func(lc fx.Lifecycle, factory *webhook.Factory, webhookHandler http.Handler, primaryRouter primaryRouter, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
+				var scheme = "https"
+				if v.GetBool("disableSnsTls") {
+					scheme = "http"
 				}
 
 				selfURL := &url.URL{
 					Scheme: scheme,
-					Host:   v.GetString("fqdn") + v.GetString("primary.address"),
+					Host:   v.GetString("fqdn") + v.GetString("servers.primary.address"),
 				}
 
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
@@ -167,19 +171,18 @@ func main() {
 				webhookFactory.SetExternalUpdate(createArgusSynchronizer(argus, logger))
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
-						// wait for DNS to propagate before subscribing to SNS
-						if err = webhookFactory.DnsReady(); err == nil {
-							//TODO: If we know with certainty this is a docker-compose specific hack, we could add a delay elsewhere or
-							//only run this case when running from our test cluster?
-							time.Sleep(time.Second * 5)
-							logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
-							webhookFactory.PrepareAndStart()
-							return nil
-						} else {
+						err = webhookFactory.DnsReady()
+						if err != nil {
 							logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
 								logging.ErrorKey(), err)
 							return err
 						}
+						//TODO: If we know with certainty this is a docker-compose specific hack, we could add a delay elsewhere or
+						//only run this case when running from our test cluster?
+						time.Sleep(time.Second * 2)
+						logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
+						webhookFactory.PrepareAndStart()
+						return nil
 					},
 				})
 			},
@@ -252,13 +255,13 @@ func printVersionInfo() {
 }
 
 // TODO: once we get rid of any packages that need an unmarshaller, remove this.
-type UnmarshallerOut struct {
+type unmarshallerOut struct {
 	fx.Out
 	Unmarshaller config.Unmarshaller
 }
 
-func ProvideUnmarshaller(v *viper.Viper) UnmarshallerOut {
-	return UnmarshallerOut{
+func provideUnmarshaller(v *viper.Viper) unmarshallerOut {
+	return unmarshallerOut{
 		Unmarshaller: config.ViperUnmarshaller{Viper: v, Options: []viper.DecoderConfigOption{}},
 	}
 }
