@@ -171,9 +171,8 @@ func main() {
 				webhookFactory.SetExternalUpdate(createArgusSynchronizer(argus, logger))
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
-						err = webhookFactory.DnsReady()
-						if err != nil {
-							logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
+						if err := webhookFactory.DnsReady(); err != nil {
+						       logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
 								logging.ErrorKey(), err)
 							return err
 						}
