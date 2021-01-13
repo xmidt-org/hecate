@@ -15,7 +15,7 @@ popd
 echo "Running services..."
 TR1D1UM_VERSION=${TR1D1UM_VERSION:-0.5.1} \
 CADUCEUS_VERSION=${CADUCEUS_VERSION:-latest} \
-ARGUS_VERSION=${ARGUS_VERSION:-v0.3.9-15-g28c67cd} \
+ARGUS_VERSION=${ARGUS_VERSION:-latest} \
 HECATE_VERSION=${HECATE_VERSION:-latest} \
 docker-compose -f $ROOT_DIR/deploy/docker-compose/docker-compose.yml up -d $@
 if [[ $? -ne 0 ]]; then
