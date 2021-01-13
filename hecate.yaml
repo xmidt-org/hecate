@@ -108,7 +108,6 @@ fqdn: "localhost"
 # If set to true, message exchange with SNS over HTTP is done without TLS.
 disableSnsTls: false
 
-# The s
 # start contains configuration for the logic by which this service can
 # fetch the current webhooks without having to wait for SNS
 # It does so by pinging the rest of the cluter at the specified apiPath
