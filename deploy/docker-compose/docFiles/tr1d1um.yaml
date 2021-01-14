@@ -28,7 +28,7 @@
     idleTimeout: "15s"
   log:
     file: "stdout"
-    level: "INFO"
+    level: "DEBUG"
     json: false
     reducedLoggingResponseCodes: [200, 504]
     
