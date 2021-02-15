@@ -165,14 +165,23 @@ aws:
 ########################################
 # Argus - Webhooks Config
 ########################################
-argus:
-  # bucket is the partition name for storing webhooks.
+
+# migration describes how items should be pushed to Argus. 
+# (Optional) All the values below will be used as default 
+# if none is specified.
+migration:
+  # owner will be the owner of the items inserted into Argus from SNS.
+  # On the reading side of Argus then components can use this value to fetch
+  # migrated items.
+  owner: "hecate-migrate"
+
+  # bucket is the partition name for storing the items.
   bucket: "webhooks"
 
+# argus is the configuration needed to setup the Argus client.
+argus:
   # pullInterval provides how often the current webhooks list gets refreshed.
   pullInterval: 5s
-
-  adminToken: Hzu1WpIe7S8G
 
   # address is Argus' network location.
   address: "http://localhost:6600"

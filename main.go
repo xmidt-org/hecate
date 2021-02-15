@@ -28,6 +28,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/go-kit/kit/metrics/provider"
 	"github.com/gorilla/mux"
 	"github.com/spf13/pflag"
@@ -49,6 +50,9 @@ var (
 type primaryRouter struct {
 	fx.In
 	Router *mux.Router `name:"servers.primary"`
+}
+
+type transitionConfig struct {
 }
 
 func setupFlagSet(fs *pflag.FlagSet) error {
@@ -86,6 +90,16 @@ func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
 	return nil
 }
 
+func newArgusClientConfig(v *viper.Viper, logger log.Logger) (chrysom.ClientConfig, error) {
+	var config chrysom.ClientConfig
+	err := v.UnmarshalKey("argus", &config)
+	config.Logger = logger
+	// TODO: What to do? This is a discard provider because we don't create providers in uber/fx style
+	config.MetricsProvider = provider.NewDiscardProvider()
+	level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("address: %s", config.Address))
+	return config, err
+}
+
 func main() {
 	// setup command line options and configuration from file
 	f := pflag.NewFlagSet(applicationName, pflag.ContinueOnError)
@@ -109,29 +123,14 @@ func main() {
 			xmetrics.NewRegistry,
 			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
 			xhealth.Unmarshal("health"),
-			func(v *viper.Viper, logger log.Logger) (*chrysom.ClientConfig, error) {
-				config := new(chrysom.ClientConfig)
-				err := v.UnmarshalKey("argus", &config)
-				config.Logger = logger
-				// TODO: What to do? This is a discard provider because we don't create providers in uber/fx style
-				config.MetricsProvider = provider.NewDiscardProvider()
-				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("address: %s", config.Address))
-				return config, err
-			},
+			newArgusClientConfig,
 			webhook.NewFactory,
 			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
-				webhookRegistry, webhookHandler := factory.NewRegistryAndHandler(metrics)
-				lc.Append(fx.Hook{
-					OnStop: func(ctx context.Context) error {
-						close(webhookRegistry.Changes)
-						return nil
-					},
-				})
-
+				_, webhookHandler := factory.NewRegistryAndHandler(metrics)
 				return webhookHandler
 			},
-			func(config *chrysom.ClientConfig) (*chrysom.Client, error) {
-				return chrysom.CreateClient(*config)
+			func(config chrysom.ClientConfig) (*chrysom.Client, error) {
+				return chrysom.NewClient(config)
 			},
 			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
 			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
@@ -172,7 +171,7 @@ func main() {
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
 						if err := webhookFactory.DnsReady(); err != nil {
-						       logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
+							logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
 								logging.ErrorKey(), err)
 							return err
 						}
@@ -196,12 +195,12 @@ func main() {
 	}
 }
 
-func createArgusSynchronizer(argus *chrysom.Client, logger log.Logger) func([]webhook.W) {
+func createArgusSynchronizer(argus *chrysom.Client, config transitionConfig, logger log.Logger) func([]webhook.W) {
 	return func(webhooks []webhook.W) {
 		for _, w := range webhooks {
 			logging.Info(logger).Log("msg", "Pushing webhook update from SNS into Argus")
 
-			item, err := webhookToItem(&w)
+			item, err := webhookToItem(w)
 			if err != nil {
 				logging.Error(logger).Log(logging.MessageKey(), "failed to convert webhook to item", "err", err)
 				continue
@@ -220,21 +219,21 @@ func createArgusSynchronizer(argus *chrysom.Client, logger log.Logger) func([]we
 	}
 }
 
-func webhookToItem(w *webhook.W) (*model.Item, error) {
+func webhookToItem(w webhook.W) (model.Item, error) {
 	encodedWebhook, err := json.Marshal(w)
 	if err != nil {
-		return nil, err
+		return model.Item{}, err
 	}
 	var data map[string]interface{}
 	err = json.Unmarshal(encodedWebhook, &data)
 	if err != nil {
-		return nil, err
+		return model.Item{}, err
 	}
 
 	checkSumURL := sha256.Sum256([]byte(w.Config.URL))
 	TTLSeconds := int64(w.Duration.Seconds())
 
-	return &model.Item{
+	return model.Item{
 		Data: data,
 		ID:   base64.RawURLEncoding.EncodeToString(checkSumURL[:]),
 		TTL:  &TTLSeconds,
