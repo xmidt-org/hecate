@@ -201,6 +201,14 @@ func main() {
 }
 
 func createArgusSynchronizer(argus *chrysom.Client, config transitionConfig, logger log.Logger) func([]webhook.W) {
+	if len(config.Bucket) == 0 {
+		config.Bucket = "webhooks"
+	}
+
+	if len(config.Owner) == 0 {
+		config.Owner = "hecate-migrate"
+	}
+
 	return func(webhooks []webhook.W) {
 		for _, w := range webhooks {
 			logging.Info(logger).Log("msg", "Pushing webhook update from SNS into Argus")

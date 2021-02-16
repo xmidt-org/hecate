@@ -37,7 +37,7 @@ prometheus:
 health:
   disableLogging: false
   custom:
-    server: server 
+    server: server
 
 ########################################
 #   labeling/tracing via http headers configuration
@@ -119,7 +119,6 @@ start:
   # path used to query the existing webhooks
   apiPath: http://localhost:6100/hooks
 
-
 ########################################
 # SNS - Webhooks DNS readiness Configuration
 ########################################
@@ -161,22 +160,22 @@ aws:
     #urlPath is the URL path SNS will use to confirm a subscription with this server
     urlPath: "/api/v2/aws/sns"
 
-
 ########################################
 # Argus - Webhooks Config
 ########################################
 
-# migration describes how items should be pushed to Argus. 
-# (Optional) All the values below will be used as default 
+# migration describes how items should be pushed to Argus.
+# (Optional) All the values below will be used as default
 # if none is specified.
 migration:
-  # owner will be the owner of the items inserted into Argus from SNS.
+  # (Optional) owner will be the owner of the items inserted into Argus from SNS.
   # On the reading side of Argus then components can use this value to fetch
-  # migrated items.
-  owner: "hecate-migrate"
+  # migrated items. If none is provided, the default is "hecate-migrate"
+  owner: ""
 
-  # bucket is the partition name for storing the items.
-  bucket: "webhooks"
+  # (Optional) bucket is the partition name for storing the items.
+  # If none is provided, the default is "webhooks"
+  bucket: ""
 
 # argus is the configuration needed to setup the Argus client.
 argus:
