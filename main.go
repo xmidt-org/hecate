@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -19,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmidt-org/argus/chrysom"
 	"github.com/xmidt-org/argus/model"
+	"github.com/xmidt-org/argus/store"
 	"github.com/xmidt-org/themis/config"
 	"github.com/xmidt-org/themis/xhealth"
 	"github.com/xmidt-org/themis/xhttp/xhttpserver"
@@ -237,12 +236,12 @@ func webhookToItem(w webhook.W) (model.Item, error) {
 		return model.Item{}, err
 	}
 
-	checkSumURL := sha256.Sum256([]byte(w.Config.URL))
+	checkSumURL := store.Sha256HexDigest(w.Config.URL)
 	TTLSeconds := int64(w.Duration.Seconds())
 
 	return model.Item{
 		Data: data,
-		ID:   base64.RawURLEncoding.EncodeToString(checkSumURL[:]),
+		ID:   checkSumURL,
 		TTL:  &TTLSeconds,
 	}, nil
 }
