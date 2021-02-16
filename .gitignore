@@ -17,6 +17,10 @@ report.json
 # Ignore the vendor structure
 *vendor/
 
+# for goland
+.idea/
+report.json
+
 # Ignore the various build artifacts
 .ignore
 

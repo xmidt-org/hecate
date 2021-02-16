@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,10 +11,13 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/xmidt-org/arrange"
+
 	"github.com/InVisionApp/go-health"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmidt-org/argus/chrysom"
 	"github.com/xmidt-org/argus/model"
+	"github.com/xmidt-org/argus/store"
 	"github.com/xmidt-org/themis/config"
 	"github.com/xmidt-org/themis/xhealth"
 	"github.com/xmidt-org/themis/xhttp/xhttpserver"
@@ -28,6 +29,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/go-kit/kit/metrics/provider"
 	"github.com/gorilla/mux"
 	"github.com/spf13/pflag"
@@ -49,6 +51,11 @@ var (
 type primaryRouter struct {
 	fx.In
 	Router *mux.Router `name:"servers.primary"`
+}
+
+type transitionConfig struct {
+	Owner  string
+	Bucket string
 }
 
 func setupFlagSet(fs *pflag.FlagSet) error {
@@ -86,6 +93,16 @@ func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
 	return nil
 }
 
+func newArgusClientConfig(v *viper.Viper, logger log.Logger) (chrysom.ClientConfig, error) {
+	var config chrysom.ClientConfig
+	err := v.UnmarshalKey("argus", &config)
+	config.Logger = logger
+	// TODO: What to do? This is a discard provider because we don't create providers in uber/fx style
+	config.MetricsProvider = provider.NewDiscardProvider()
+	level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("address: %s", config.Address))
+	return config, err
+}
+
 func main() {
 	// setup command line options and configuration from file
 	f := pflag.NewFlagSet(applicationName, pflag.ContinueOnError)
@@ -102,6 +119,7 @@ func main() {
 		fx.Supply(v),
 		webhook.ProvideMetrics(),
 		aws.ProvideMetrics(),
+		arrange.ForViper(v),
 		fx.Provide(
 			provideUnmarshaller,
 			xlog.Unmarshal("log"),
@@ -109,29 +127,15 @@ func main() {
 			xmetrics.NewRegistry,
 			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
 			xhealth.Unmarshal("health"),
-			func(v *viper.Viper, logger log.Logger) (*chrysom.ClientConfig, error) {
-				config := new(chrysom.ClientConfig)
-				err := v.UnmarshalKey("argus", &config)
-				config.Logger = logger
-				// TODO: What to do? This is a discard provider because we don't create providers in uber/fx style
-				config.MetricsProvider = provider.NewDiscardProvider()
-				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("address: %s", config.Address))
-				return config, err
-			},
+			arrange.UnmarshalKey("migration", transitionConfig{}),
+			newArgusClientConfig,
 			webhook.NewFactory,
 			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
-				webhookRegistry, webhookHandler := factory.NewRegistryAndHandler(metrics)
-				lc.Append(fx.Hook{
-					OnStop: func(ctx context.Context) error {
-						close(webhookRegistry.Changes)
-						return nil
-					},
-				})
-
+				_, webhookHandler := factory.NewRegistryAndHandler(metrics)
 				return webhookHandler
 			},
-			func(config *chrysom.ClientConfig) (*chrysom.Client, error) {
-				return chrysom.CreateClient(*config)
+			func(config chrysom.ClientConfig) (*chrysom.Client, error) {
+				return chrysom.NewClient(config)
 			},
 			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
 			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
@@ -167,12 +171,12 @@ func main() {
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
 			},
-			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, argus *chrysom.Client, logger log.Logger) {
-				webhookFactory.SetExternalUpdate(createArgusSynchronizer(argus, logger))
+			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, argus *chrysom.Client, migrationConfig transitionConfig, logger log.Logger) {
+				webhookFactory.SetExternalUpdate(createArgusSynchronizer(argus, migrationConfig, logger))
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
 						if err := webhookFactory.DnsReady(); err != nil {
-						       logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
+							logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
 								logging.ErrorKey(), err)
 							return err
 						}
@@ -196,17 +200,26 @@ func main() {
 	}
 }
 
-func createArgusSynchronizer(argus *chrysom.Client, logger log.Logger) func([]webhook.W) {
+func createArgusSynchronizer(argus *chrysom.Client, config transitionConfig, logger log.Logger) func([]webhook.W) {
+	if len(config.Bucket) == 0 {
+		config.Bucket = "webhooks"
+	}
+
+	if len(config.Owner) == 0 {
+		config.Owner = "hecate-migrate"
+	}
+
 	return func(webhooks []webhook.W) {
 		for _, w := range webhooks {
 			logging.Info(logger).Log("msg", "Pushing webhook update from SNS into Argus")
 
-			item, err := webhookToItem(&w)
+			item, err := webhookToItem(w)
 			if err != nil {
 				logging.Error(logger).Log(logging.MessageKey(), "failed to convert webhook to item", "err", err)
 				continue
 			}
-			result, err := argus.Push(*item, "argus", false)
+
+			result, err := argus.PushItem(item.ID, config.Bucket, config.Owner, item)
 			if err != nil {
 				logging.Error(logger).Log(logging.MessageKey(), "failed to push item to Argus", "err", err)
 				continue
@@ -220,23 +233,23 @@ func createArgusSynchronizer(argus *chrysom.Client, logger log.Logger) func([]we
 	}
 }
 
-func webhookToItem(w *webhook.W) (*model.Item, error) {
+func webhookToItem(w webhook.W) (model.Item, error) {
 	encodedWebhook, err := json.Marshal(w)
 	if err != nil {
-		return nil, err
+		return model.Item{}, err
 	}
 	var data map[string]interface{}
 	err = json.Unmarshal(encodedWebhook, &data)
 	if err != nil {
-		return nil, err
+		return model.Item{}, err
 	}
 
-	checkSumURL := sha256.Sum256([]byte(w.Config.URL))
+	checkSumURL := store.Sha256HexDigest(w.Config.URL)
 	TTLSeconds := int64(w.Duration.Seconds())
 
-	return &model.Item{
+	return model.Item{
 		Data: data,
-		ID:   base64.RawURLEncoding.EncodeToString(checkSumURL[:]),
+		ID:   checkSumURL,
 		TTL:  &TTLSeconds,
 	}, nil
 }
