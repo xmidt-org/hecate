@@ -12,6 +12,7 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/xmidt-org/argus v0.3.11-0.20210209172219-9d1bc428b335
+	github.com/xmidt-org/arrange v0.1.9
 	github.com/xmidt-org/themis v0.4.6
 	github.com/xmidt-org/webpa-common v1.11.5-0.20210120003553-3d03d7329aee
 	go.uber.org/fx v1.13.1

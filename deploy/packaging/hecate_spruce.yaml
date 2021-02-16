@@ -69,7 +69,6 @@ flavor: mint
 # change this will only effect spruce and the vars referencing it
 stage: (( grab $STAGE || "development" ))
 
-
 ########################################
 #   Logging Related Configuration
 ########################################
@@ -108,10 +107,10 @@ log:
 # The unique fully-qualified-domain-name of the server.  The webhooks library uses it
 # to know which host to use to confirm this service is ready to receive events
 # (Optional if not running webhooks)
-fqdn: hecate 
+fqdn: hecate
 
 # If set to true, message exchange with SNS over HTTP is done without TLS.
-disableSnsTls: (( grab $DISABLE_SNS_TLS || false )) 
+disableSnsTls: (( grab $DISABLE_SNS_TLS || false ))
 
 # start contains configuration for the logic by which this service can
 # fetch the current webhooks without having to wait for SNS
@@ -123,7 +122,6 @@ start:
 
   # path used to query the existing webhooks
   apiPath: http://localhost:6100/hooks
-
 
 ########################################
 # SNS - Webhooks DNS readiness Configuration
@@ -137,7 +135,6 @@ waitForDns: "30s"
 soa:
   # provider is the SOA provider used to verify DNS record readiness of this service
   provider: (( grab $SOA_PROVIDER || "" ))
-
 
 ########################################
 # SNS - Webhooks AWS Configuration
@@ -156,7 +153,7 @@ aws:
   sns:
     # awsEndpoint is the AWS endpoint
     # this must be left out in produ
-    awsEndpoint: (( grab $AWS_ENDPOINT || "" )) 
+    awsEndpoint: (( grab $AWS_ENDPOINT || "" ))
 
     #region is the AWS SNS region
     region: (( grab $AWS_REGION || "us-east-1" ))
@@ -167,16 +164,25 @@ aws:
     #urlPath is the URL path SNS will use to confirm a subscription with this server
     urlPath: "/api/v2/aws/sns"
 
-
 ########################################
 # Argus - Webhooks Config
 ########################################
-argus:
+# migration describes how items should be pushed to Argus.
+# (Optional) All the values below will be used as default
+# if none is specified.
+migration:
+  # owner will be the owner of the items inserted into Argus from SNS.
+  # On the reading side of Argus then components can use this value to fetch
+  # migrated items.
+  owner: (( grab $ARGUS_OWNER || "hecate-migrate" ))
+
   # bucket is the partition name for storing webhooks.
   bucket: (( grab $ARGUS_BUCKET || "webhooks" ))
 
+# argus is the configuration needed to setup the Argus client.
+argus:
   # pullInterval provides how often the current webhooks list gets refreshed.
-  pullInterval:  (( grab $ARGUS_PULL_INTERVAL || "2s" ))
+  pullInterval: (( grab $ARGUS_PULL_INTERVAL || "2s" ))
 
   adminToken: (( grab $ARGUS_ADMIN_TOKEN || "Hzu1WpIe7S8G" ))
 

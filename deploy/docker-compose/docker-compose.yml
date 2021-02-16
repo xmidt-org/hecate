@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 services:
   caduceus:
     image: xmidt/caduceus:${CADUCEUS_VERSION}
@@ -33,6 +33,8 @@ services:
       - "AWS_ACCESS_KEY=nahbro"
       - "LOG_LEVEL=DEBUG"
       - "DISABLE_SNS_TLS=true"
+      - "ARGUS_OWNER=testOwner"
+      - "ARGUS_BUCKET=testBucket"
     networks:
       - xmidt
 

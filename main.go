@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/xmidt-org/arrange"
+
 	"github.com/InVisionApp/go-health"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmidt-org/argus/chrysom"
@@ -53,6 +55,8 @@ type primaryRouter struct {
 }
 
 type transitionConfig struct {
+	Owner  string
+	Bucket string
 }
 
 func setupFlagSet(fs *pflag.FlagSet) error {
@@ -116,6 +120,7 @@ func main() {
 		fx.Supply(v),
 		webhook.ProvideMetrics(),
 		aws.ProvideMetrics(),
+		arrange.ForViper(v),
 		fx.Provide(
 			provideUnmarshaller,
 			xlog.Unmarshal("log"),
@@ -123,6 +128,7 @@ func main() {
 			xmetrics.NewRegistry,
 			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
 			xhealth.Unmarshal("health"),
+			arrange.UnmarshalKey("migration", transitionConfig{}),
 			newArgusClientConfig,
 			webhook.NewFactory,
 			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
@@ -166,8 +172,8 @@ func main() {
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
 			},
-			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, argus *chrysom.Client, logger log.Logger) {
-				webhookFactory.SetExternalUpdate(createArgusSynchronizer(argus, logger))
+			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, argus *chrysom.Client, migrationConfig transitionConfig, logger log.Logger) {
+				webhookFactory.SetExternalUpdate(createArgusSynchronizer(argus, migrationConfig, logger))
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
 						if err := webhookFactory.DnsReady(); err != nil {
@@ -205,7 +211,8 @@ func createArgusSynchronizer(argus *chrysom.Client, config transitionConfig, log
 				logging.Error(logger).Log(logging.MessageKey(), "failed to convert webhook to item", "err", err)
 				continue
 			}
-			result, err := argus.Push(*item, "argus", false)
+
+			result, err := argus.PushItem(item.ID, config.Bucket, config.Owner, item)
 			if err != nil {
 				logging.Error(logger).Log(logging.MessageKey(), "failed to push item to Argus", "err", err)
 				continue
