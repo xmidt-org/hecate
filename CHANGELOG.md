@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 - Make owner and bucket configurable. [#26](https://github.com/xmidt-org/hecate/pull/26)
 - Fix sonar badge in readme. [#29](https://github.com/xmidt-org/hecate/pull/29)
-- Bump argus dep version. [30#](https://github.com/xmidt-org/hecate/pull/30)
+- Bump argus dep version. [#31](https://github.com/xmidt-org/hecate/pull/31)
 
 ## [v0.1.1]
 - Use UberFx. [#20](https://github.com/xmidt-org/hecate/pull/20)
