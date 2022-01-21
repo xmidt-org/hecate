@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
+- Updated spec file and rpkg version macro to be able to choose when the 'v' is included in the version. [#32](https://github.com/xmidt-org/hecate/pull/32)
 
 ## [v0.1.2]
 - Make owner and bucket configurable. [#26](https://github.com/xmidt-org/hecate/pull/26)
