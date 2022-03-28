@@ -114,7 +114,7 @@ disableSnsTls: (( grab $DISABLE_SNS_TLS || false ))
 
 # start contains configuration for the logic by which this service can
 # fetch the current webhooks without having to wait for SNS
-# It does so by pinging the rest of the cluter at the specified apiPath
+# It does so by pinging the rest of the cluster at the specified apiPath
 # More details at https://godoc.org/github.com/xmidt-org/webpa-common/webhook#StartConfig
 start:
   # duration is the max amount of time allowed to wait for webhooks data to be retrieved
@@ -176,19 +176,14 @@ migration:
   # migrated items. If none is provided, the default is "hecate-migrate"
   owner: (( grab $ARGUS_OWNER || "" ))
 
+# argus is the configuration needed to setup the Argus client.
+argus:
+  # address is Argus' network location.
+  address: (( grab  $ARGUS_ENDPOINT || "http://argus:6600" ))
+
   # (Optional) bucket is the partition name for storing the items.
   # If none is provided, the default is "webhooks"
   bucket: (( grab $ARGUS_BUCKET || "" ))
-
-# argus is the configuration needed to setup the Argus client.
-argus:
-  # pullInterval provides how often the current webhooks list gets refreshed.
-  pullInterval: (( grab $ARGUS_PULL_INTERVAL || "2s" ))
-
-  adminToken: (( grab $ARGUS_ADMIN_TOKEN || "Hzu1WpIe7S8G" ))
-
-  # address is Argus' network location.
-  address: (( grab  $ARGUS_ENDPOINT || "http://argus:6600" ))
 
   # auth the authentication method for argus.
   auth:
