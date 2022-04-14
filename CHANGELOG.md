@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [v0.2.0]
 - Updated spec file and rpkg version macro to be able to choose when the 'v' is included in the version. [#32](https://github.com/xmidt-org/hecate/pull/32)
+- Updated chrysom version, added ancla dependency.  Removed default owner value. [#36](https://github.com/xmidt-org/hecate/pull/36)
 
 ## [v0.1.2]
 - Make owner and bucket configurable. [#26](https://github.com/xmidt-org/hecate/pull/26)
@@ -27,7 +30,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Initial run of the application. [#8](https://github.com/xmidt-org/hecate/pull/8)
 - Sonarcube fix. [#16](https://github.com/xmidt-org/hecate/pull/16)
 
-[Unreleased]: https://github.com/xmidt-org/hecate/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/xmidt-org/hecate/compare/v0.2.0...HEAD
+[v0.2.0]: https://github.com/xmidt-org/hecate/compare/v0.1.2...v0.2.0
 [v0.1.2]: https://github.com/xmidt-org/hecate/compare/v0.1.1...v0.1.2
 [v0.1.1]: https://github.com/xmidt-org/hecate/compare/v0.1.0...v0.1.1
 [v0.1.0]: https://github.com/xmidt-org/hecate/compare/v0.1.0...v0.1.0
