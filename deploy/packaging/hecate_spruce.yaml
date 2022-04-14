@@ -82,7 +82,7 @@ log:
 
   # level is the logging level to use - INFO, DEBUG, WARN, ERROR
   # (Optional) defaults to ERROR
-  level: (( grab $LOG_LEVEL || "INFO" ))
+  level: (( grab $LOG_LEVEL || "DEBUG" ))
 
   # maxsize is the maximum file size in MB
   # (Optional) defaults to max 100MB
@@ -110,7 +110,7 @@ log:
 fqdn: hecate
 
 # If set to true, message exchange with SNS over HTTP is done without TLS.
-disableSnsTls: (( grab $DISABLE_SNS_TLS || false ))
+disableSnsTls: (( grab $DISABLE_SNS_TLS || true ))
 
 # start contains configuration for the logic by which this service can
 # fetch the current webhooks without having to wait for SNS
@@ -173,7 +173,7 @@ aws:
 migration:
   # (Optional) owner will be the owner of the items inserted into Argus from SNS.
   # On the reading side of Argus then components can use this value to fetch
-  # migrated items. If none is provided, the default is "hecate-migrate"
+  # migrated items.
   owner: (( grab $ARGUS_OWNER || "" ))
 
 # argus is the configuration needed to setup the Argus client.

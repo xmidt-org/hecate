@@ -170,7 +170,7 @@ aws:
 migration:
   # (Optional) owner will be the owner of the items inserted into Argus from SNS.
   # On the reading side of Argus then components can use this value to fetch
-  # migrated items. If none is provided, the default is "hecate-migrate"
+  # migrated items.
   owner: ""
 
 # argus is the configuration needed to setup the Argus client.
