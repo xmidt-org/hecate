@@ -152,8 +152,8 @@ aws:
 
   sns:
     # awsEndpoint is the AWS endpoint
-    # this must be left out in produ
-    awsEndpoint: (( grab $AWS_ENDPOINT || "" ))
+    # this must be left out in production.
+    awsEndpoint: (( grab $AWS_ENDPOINT || "http://goaws:4100" ))
 
     #region is the AWS SNS region
     region: (( grab $AWS_REGION || "us-east-1" ))
@@ -183,7 +183,7 @@ argus:
 
   # (Optional) bucket is the partition name for storing the items.
   # If none is provided, the default is "webhooks"
-  bucket: (( grab $ARGUS_BUCKET || "" ))
+  bucket: (( grab $ARGUS_BUCKET || "webhooks" ))
 
   # auth the authentication method for argus.
   auth:
