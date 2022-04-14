@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -11,13 +10,12 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/xmidt-org/ancla"
 	"github.com/xmidt-org/arrange"
 
 	"github.com/InVisionApp/go-health"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmidt-org/argus/chrysom"
-	"github.com/xmidt-org/argus/model"
-	"github.com/xmidt-org/argus/store"
 	"github.com/xmidt-org/themis/config"
 	"github.com/xmidt-org/themis/xhealth"
 	"github.com/xmidt-org/themis/xhttp/xhttpserver"
@@ -30,7 +28,6 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/go-kit/kit/metrics/provider"
 	"github.com/gorilla/mux"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -54,8 +51,7 @@ type primaryRouter struct {
 }
 
 type transitionConfig struct {
-	Owner  string
-	Bucket string
+	Owner string
 }
 
 func setupFlagSet(fs *pflag.FlagSet) error {
@@ -93,13 +89,11 @@ func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
 	return nil
 }
 
-func newArgusClientConfig(v *viper.Viper, logger log.Logger) (chrysom.ClientConfig, error) {
-	var config chrysom.ClientConfig
+func newArgusClientConfig(v *viper.Viper, logger log.Logger) (chrysom.BasicClientConfig, error) {
+	var config chrysom.BasicClientConfig
 	err := v.UnmarshalKey("argus", &config)
 	config.Logger = logger
-	// TODO: What to do? This is a discard provider because we don't create providers in uber/fx style
-	config.MetricsProvider = provider.NewDiscardProvider()
-	level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("address: %s", config.Address))
+	level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", config.Address))
 	return config, err
 }
 
@@ -134,8 +128,8 @@ func main() {
 				_, webhookHandler := factory.NewRegistryAndHandler(metrics)
 				return webhookHandler
 			},
-			func(config chrysom.ClientConfig) (*chrysom.Client, error) {
-				return chrysom.NewClient(config)
+			func(config chrysom.BasicClientConfig) (*chrysom.BasicClient, error) {
+				return chrysom.NewBasicClient(config, nil)
 			},
 			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
 			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
@@ -171,8 +165,8 @@ func main() {
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
 			},
-			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, argus *chrysom.Client, migrationConfig transitionConfig, logger log.Logger) {
-				webhookFactory.SetExternalUpdate(createArgusSynchronizer(argus, migrationConfig, logger))
+			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, client *chrysom.BasicClient, migrationConfig transitionConfig, logger log.Logger) {
+				webhookFactory.SetExternalUpdate(createArgusSynchronizer(client, migrationConfig, logger))
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
 						if err := webhookFactory.DnsReady(); err != nil {
@@ -200,26 +194,32 @@ func main() {
 	}
 }
 
-func createArgusSynchronizer(argus *chrysom.Client, config transitionConfig, logger log.Logger) func([]webhook.W) {
-	if len(config.Bucket) == 0 {
-		config.Bucket = "webhooks"
-	}
-
-	if len(config.Owner) == 0 {
-		config.Owner = "hecate-migrate"
-	}
-
+func createArgusSynchronizer(client *chrysom.BasicClient, config transitionConfig, logger log.Logger) func([]webhook.W) {
 	return func(webhooks []webhook.W) {
 		for _, w := range webhooks {
 			logging.Info(logger).Log("msg", "Pushing webhook update from SNS into Argus")
 
-			item, err := webhookToItem(w)
+			internalW := ancla.InternalWebhook{
+				PartnerIDs: []string{"comcast"},
+				Webhook: ancla.Webhook{
+					Address:    w.Address,
+					Config:     w.Config,
+					FailureURL: w.FailureURL,
+					Events:     w.Events,
+					Matcher: ancla.MetadataMatcherConfig{
+						DeviceID: w.Matcher.DeviceId,
+					},
+					Duration: w.Duration,
+					Until:    w.Until,
+				},
+			}
+			item, err := ancla.InternalWebhookToItem(time.Now, internalW)
 			if err != nil {
 				logging.Error(logger).Log(logging.MessageKey(), "failed to convert webhook to item", "err", err)
 				continue
 			}
 
-			result, err := argus.PushItem(item.ID, config.Bucket, config.Owner, item)
+			result, err := client.PushItem(context.Background(), config.Owner, item)
 			if err != nil {
 				logging.Error(logger).Log(logging.MessageKey(), "failed to push item to Argus", "err", err)
 				continue
@@ -231,27 +231,6 @@ func createArgusSynchronizer(argus *chrysom.Client, config transitionConfig, log
 			logging.Debug(logger).Log(logging.MessageKey(), "Successfully pushed an webhook item from SNS to Argus")
 		}
 	}
-}
-
-func webhookToItem(w webhook.W) (model.Item, error) {
-	encodedWebhook, err := json.Marshal(w)
-	if err != nil {
-		return model.Item{}, err
-	}
-	var data map[string]interface{}
-	err = json.Unmarshal(encodedWebhook, &data)
-	if err != nil {
-		return model.Item{}, err
-	}
-
-	checkSumURL := store.Sha256HexDigest(w.Config.URL)
-	TTLSeconds := int64(w.Duration.Seconds())
-
-	return model.Item{
-		Data: data,
-		ID:   checkSumURL,
-		TTL:  &TTLSeconds,
-	}, nil
 }
 
 func printVersionInfo() {

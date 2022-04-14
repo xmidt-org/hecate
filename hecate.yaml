@@ -110,7 +110,7 @@ disableSnsTls: false
 
 # start contains configuration for the logic by which this service can
 # fetch the current webhooks without having to wait for SNS
-# It does so by pinging the rest of the cluter at the specified apiPath
+# It does so by pinging the rest of the cluster at the specified apiPath
 # More details at https://godoc.org/github.com/xmidt-org/webpa-common/webhook#StartConfig
 start:
   # duration is the max amount of time allowed to wait for webhooks data to be retrieved
@@ -170,20 +170,17 @@ aws:
 migration:
   # (Optional) owner will be the owner of the items inserted into Argus from SNS.
   # On the reading side of Argus then components can use this value to fetch
-  # migrated items. If none is provided, the default is "hecate-migrate"
+  # migrated items.
   owner: ""
+
+# argus is the configuration needed to setup the Argus client.
+argus:
+  # address is Argus' network location.
+  address: "http://localhost:6600"
 
   # (Optional) bucket is the partition name for storing the items.
   # If none is provided, the default is "webhooks"
   bucket: ""
-
-# argus is the configuration needed to setup the Argus client.
-argus:
-  # pullInterval provides how often the current webhooks list gets refreshed.
-  pullInterval: 5s
-
-  # address is Argus' network location.
-  address: "http://localhost:6600"
 
   # auth the authentication method for argus.
   auth:
