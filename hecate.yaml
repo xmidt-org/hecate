@@ -133,10 +133,29 @@ soa:
   # provider: "example-123.awsdns-00.com:17"
 
 ########################################
-# SNS - Webhooks AWS Configuration
+# Upstream Config
 ########################################
 
-# aws provides the AWS SNS configurations the webhooks library needs
+# upstream provides guidance on where to pull webhooks from. Either aws or argus
+# need to be set. aws is only used when argus is not set. AWS configuration
+# cannot be nested under upstream due to restrictions in legacy code.
+upstream: 
+  # argus is the configuration needed to setup the Argus client.
+  argus:
+    # address is Argus' network location.
+    address: "http://localhost:6600"
+
+    # (Optional) bucket is the partition name for storing the items.
+    # If none is provided, the default is "webhooks"
+    bucket: ""
+
+    # auth the authentication method for argus.
+    auth:
+      # basic configures basic authentication for argus.
+      # Must be of form: 'Basic xyz=='
+      basic: "Basic dXNlcjpwYXNz"
+
+# aws provides the configurations the webhooks library needs to read from AWS SNS.
 aws:
   #AWS access key
   accessKey: "accessKey"
@@ -145,7 +164,6 @@ aws:
   secretKey: "secretKey"
 
   env: local-dev
-
   sns:
     # awsEndpoint is the AWS endpoint
     # this must be left out in produ
@@ -161,29 +179,27 @@ aws:
     urlPath: "/api/v2/aws/sns"
 
 ########################################
-# Argus - Webhooks Config
+# Downstream Config
 ########################################
 
-# migration describes how items should be pushed to Argus.
-# (Optional) All the values below will be used as default
-# if none is specified.
-migration:
+# downstream provides guidance on where to push webhooks to.
+downstream:
   # (Optional) owner will be the owner of the items inserted into Argus from SNS.
   # On the reading side of Argus then components can use this value to fetch
   # migrated items.
   owner: ""
 
-# argus is the configuration needed to setup the Argus client.
-argus:
-  # address is Argus' network location.
-  address: "http://localhost:6600"
+  # argus is the configuration needed to setup the Argus client.
+  argus:
+    # address is Argus' network location.
+    address: "http://localhost:6600"
 
-  # (Optional) bucket is the partition name for storing the items.
-  # If none is provided, the default is "webhooks"
-  bucket: ""
+    # (Optional) bucket is the partition name for storing the items.
+    # If none is provided, the default is "webhooks"
+    bucket: ""
 
-  # auth the authentication method for argus.
-  auth:
-    # basic configures basic authentication for argus.
-    # Must be of form: 'Basic xyz=='
-    basic: "Basic dXNlcjpwYXNz"
+    # auth the authentication method for argus.
+    auth:
+      # basic configures basic authentication for argus.
+      # Must be of form: 'Basic xyz=='
+      basic: "Basic dXNlcjpwYXNz"
