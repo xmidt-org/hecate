@@ -50,6 +50,12 @@ type primaryRouter struct {
 	Router *mux.Router `name:"servers.primary"`
 }
 
+type DownstreamIn struct {
+	fx.In
+	Logger log.Logger
+	Config chrysom.BasicClientConfig `name:"downstream_argus_config"`
+}
+
 type transitionConfig struct {
 	Owner string
 }
@@ -89,13 +95,9 @@ func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
 	return nil
 }
 
-func newArgusClientConfig(v *viper.Viper, logger log.Logger) (chrysom.BasicClientConfig, error) {
-	var config chrysom.BasicClientConfig
-	err := v.UnmarshalKey("argus", &config)
-	config.Logger = logger
-	level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", config.Address))
-	return config, err
-}
+// config.Logger = logger
+// level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", config.Address))
+// return config, err
 
 func main() {
 	// setup command line options and configuration from file
@@ -121,15 +123,31 @@ func main() {
 			xmetrics.NewRegistry,
 			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
 			xhealth.Unmarshal("health"),
-			arrange.UnmarshalKey("migration", transitionConfig{}),
-			newArgusClientConfig,
+			arrange.UnmarshalKey("downstream", transitionConfig{}),
+			fx.Annotated{
+				Name:   "upstream_argus_config",
+				Target: arrange.UnmarshalKey("upstream.argus", chrysom.BasicClientConfig{}),
+			},
+			fx.Annotated{
+				Name:   "downstream_argus_config",
+				Target: arrange.UnmarshalKey("downstream.argus", chrysom.BasicClientConfig{}),
+			},
+			// TODO: add setup for ancla client, only set up aws webhooks if the upstream argus isn't set.
 			webhook.NewFactory,
 			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
 				_, webhookHandler := factory.NewRegistryAndHandler(metrics)
 				return webhookHandler
 			},
-			func(config chrysom.BasicClientConfig) (*chrysom.BasicClient, error) {
-				return chrysom.NewBasicClient(config, nil)
+			fx.Annotated{
+				Name: "downstream_client",
+				Target: func(in DownstreamIn) (*chrysom.BasicClient, error) {
+					if in.Config.Bucket == "" {
+						in.Config.Bucket = "webhooks"
+					}
+					in.Config.Logger = in.Logger
+					level.Info(in.Logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", in.Config.Address))
+					return chrysom.NewBasicClient(in.Config, nil)
+				},
 			},
 			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
 			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
@@ -165,21 +183,7 @@ func main() {
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
 				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
 			},
-			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, client *chrysom.BasicClient, migrationConfig transitionConfig, logger log.Logger) {
-				webhookFactory.SetExternalUpdate(createArgusSynchronizer(client, migrationConfig, logger))
-				lc.Append(fx.Hook{
-					OnStart: func(context.Context) error {
-						if err := webhookFactory.DnsReady(); err != nil {
-							logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
-								logging.ErrorKey(), err)
-							return err
-						}
-						logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
-						webhookFactory.PrepareAndStart()
-						return nil
-					},
-				})
-			},
+			startWebhookFactory,
 		),
 	)
 
@@ -192,6 +196,31 @@ func main() {
 		fmt.Println(err)
 		os.Exit(2)
 	}
+}
+
+type WebhookStartIn struct {
+	fx.In
+	LC              fx.Lifecycle
+	WebhookFactory  *webhook.Factory
+	Client          *chrysom.BasicClient `name:"downstream_client"`
+	MigrationConfig transitionConfig
+	Logger          log.Logger
+}
+
+func startWebhookFactory(in WebhookStartIn) {
+	in.WebhookFactory.SetExternalUpdate(createArgusSynchronizer(in.Client, in.MigrationConfig, in.Logger))
+	in.LC.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			if err := in.WebhookFactory.DnsReady(); err != nil {
+				logging.Error(in.Logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
+					logging.ErrorKey(), err)
+				return err
+			}
+			logging.Info(in.Logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
+			in.WebhookFactory.PrepareAndStart()
+			return nil
+		},
+	})
 }
 
 func createArgusSynchronizer(client *chrysom.BasicClient, config transitionConfig, logger log.Logger) func([]webhook.W) {
