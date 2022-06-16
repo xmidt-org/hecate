@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"runtime"
 	"time"
@@ -14,6 +12,7 @@ import (
 	"github.com/xmidt-org/arrange"
 
 	"github.com/InVisionApp/go-health"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmidt-org/argus/chrysom"
 	"github.com/xmidt-org/themis/config"
@@ -21,9 +20,8 @@ import (
 	"github.com/xmidt-org/themis/xhttp/xhttpserver"
 	"github.com/xmidt-org/themis/xlog"
 	"github.com/xmidt-org/themis/xlog/xloghttp"
+	"github.com/xmidt-org/themis/xmetrics"
 	"github.com/xmidt-org/themis/xmetrics/xmetricshttp"
-	"github.com/xmidt-org/webpa-common/webhook/aws"
-	"github.com/xmidt-org/webpa-common/xmetrics"
 	"go.uber.org/fx"
 
 	"github.com/go-kit/kit/log"
@@ -33,7 +31,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/xmidt-org/webpa-common/logging"
-	"github.com/xmidt-org/webpa-common/webhook"
 )
 
 const applicationName = "hecate"
@@ -54,6 +51,16 @@ type DownstreamIn struct {
 	fx.In
 	Logger log.Logger
 	Config chrysom.BasicClientConfig `name:"downstream_argus_config"`
+}
+
+type UpstreamIn struct {
+	fx.In
+	LC              fx.Lifecycle
+	GetLogger       func(context.Context) log.Logger
+	Logger          log.Logger
+	Config          ancla.Config `name:"upstream_argus_config"`
+	DownstreamWatch ancla.WatchFunc
+	Registry        xmetrics.Registry
 }
 
 type transitionConfig struct {
@@ -95,10 +102,6 @@ func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
 	return nil
 }
 
-// config.Logger = logger
-// level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", config.Address))
-// return config, err
-
 func main() {
 	// setup command line options and configuration from file
 	f := pflag.NewFlagSet(applicationName, pflag.ContinueOnError)
@@ -113,41 +116,37 @@ func main() {
 	app := fx.New(
 		xlog.Logger(),
 		fx.Supply(v),
-		webhook.ProvideMetrics(),
-		aws.ProvideMetrics(),
 		arrange.ForViper(v),
 		fx.Provide(
+			func() func(context.Context) log.Logger {
+				return func(ctx context.Context) log.Logger {
+					logger := log.With(logging.GetLogger(ctx), "ts", log.DefaultTimestampUTC, "caller", log.DefaultCaller)
+					return logger
+				}
+			},
 			provideUnmarshaller,
 			xlog.Unmarshal("log"),
 			xloghttp.ProvideStandardBuilders,
-			xmetrics.NewRegistry,
 			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
 			xhealth.Unmarshal("health"),
 			arrange.UnmarshalKey("downstream", transitionConfig{}),
 			fx.Annotated{
-				Name:   "upstream_argus_config",
-				Target: arrange.UnmarshalKey("upstream.argus", chrysom.BasicClientConfig{}),
-			},
-			fx.Annotated{
 				Name:   "downstream_argus_config",
 				Target: arrange.UnmarshalKey("downstream.argus", chrysom.BasicClientConfig{}),
 			},
-			// TODO: add setup for ancla client, only set up aws webhooks if the upstream argus isn't set.
-			webhook.NewFactory,
-			func(lc fx.Lifecycle, factory *webhook.Factory, metrics webhook.WebhookMetrics) http.Handler {
-				_, webhookHandler := factory.NewRegistryAndHandler(metrics)
-				return webhookHandler
+			// build downstream client
+			func(in DownstreamIn) (*chrysom.BasicClient, error) {
+				if in.Config.Bucket == "" {
+					in.Config.Bucket = "webhooks"
+				}
+				in.Config.Logger = in.Logger
+				level.Info(in.Logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", in.Config.Address))
+				return chrysom.NewBasicClient(in.Config, nil)
 			},
+			createArgusSynchronizer,
 			fx.Annotated{
-				Name: "downstream_client",
-				Target: func(in DownstreamIn) (*chrysom.BasicClient, error) {
-					if in.Config.Bucket == "" {
-						in.Config.Bucket = "webhooks"
-					}
-					in.Config.Logger = in.Logger
-					level.Info(in.Logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", in.Config.Address))
-					return chrysom.NewBasicClient(in.Config, nil)
-				},
+				Name:   "upstream_argus_config",
+				Target: arrange.UnmarshalKey("upstream", ancla.Config{}),
 			},
 			xhttpserver.Unmarshal{Key: "servers.primary", Optional: true}.Annotated(),
 			xhttpserver.Unmarshal{Key: "servers.metrics", Optional: true}.Annotated(),
@@ -169,21 +168,49 @@ func main() {
 			buildHealthRoutes,
 			buildMetricsRoutes,
 			buildPprofRoutes,
-			func(lc fx.Lifecycle, factory *webhook.Factory, webhookHandler http.Handler, primaryRouter primaryRouter, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
-				var scheme = "https"
-				if v.GetBool("disableSnsTls") {
-					scheme = "http"
+			func(in UpstreamIn) error {
+				in.Config.Logger = in.Logger
+
+				// TODO: move to touchstone and get rid of all of this special stuff.
+				oldMetrics := ancla.Metrics()
+				gauge, err := in.Registry.NewGauge(prometheus.GaugeOpts{
+					Name: oldMetrics[0].Name,
+					Help: oldMetrics[0].Help,
+				}, oldMetrics[0].LabelNames)
+				if err != nil {
+					return fmt.Errorf("failed to create ancla metric '%s': %v", oldMetrics[0].Name, err)
+				}
+				counter, err := in.Registry.NewCounterVec(prometheus.CounterOpts{
+					Name: oldMetrics[1].Name,
+					Help: oldMetrics[1].Help,
+				}, oldMetrics[1].LabelNames)
+				if err != nil {
+					return fmt.Errorf("failed to create ancla metric '%s': %v", oldMetrics[1].Name, err)
+				}
+				in.Config.Measures = ancla.Measures{
+					WebhookListSizeGauge:     gauge,
+					ChrysomPollsTotalCounter: counter,
 				}
 
-				selfURL := &url.URL{
-					Scheme: scheme,
-					Host:   v.GetString("fqdn") + v.GetString("servers.primary.address"),
+				_, stopWatches, err := ancla.Initialize(in.Config, in.GetLogger, logging.WithLogger, in.DownstreamWatch)
+				if err != nil {
+					return fmt.Errorf("failed to initialize upstream argus client: %v", err)
 				}
 
-				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
-				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
+				in.LC.Append(fx.Hook{
+					OnStart: func(ctx context.Context) error {
+						return nil
+					},
+					OnStop: func(ctx context.Context) error {
+						// TODO: currently, uber fx cannot restart the
+						// application. once ancla is stopped, it cannot be
+						// started again.
+						stopWatches()
+						return nil
+					},
+				})
+				return nil
 			},
-			startWebhookFactory,
 		),
 	)
 
@@ -198,51 +225,12 @@ func main() {
 	}
 }
 
-type WebhookStartIn struct {
-	fx.In
-	LC              fx.Lifecycle
-	WebhookFactory  *webhook.Factory
-	Client          *chrysom.BasicClient `name:"downstream_client"`
-	MigrationConfig transitionConfig
-	Logger          log.Logger
-}
-
-func startWebhookFactory(in WebhookStartIn) {
-	in.WebhookFactory.SetExternalUpdate(createArgusSynchronizer(in.Client, in.MigrationConfig, in.Logger))
-	in.LC.Append(fx.Hook{
-		OnStart: func(context.Context) error {
-			if err := in.WebhookFactory.DnsReady(); err != nil {
-				logging.Error(in.Logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
-					logging.ErrorKey(), err)
-				return err
-			}
-			logging.Info(in.Logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
-			in.WebhookFactory.PrepareAndStart()
-			return nil
-		},
-	})
-}
-
-func createArgusSynchronizer(client *chrysom.BasicClient, config transitionConfig, logger log.Logger) func([]webhook.W) {
-	return func(webhooks []webhook.W) {
+func createArgusSynchronizer(client *chrysom.BasicClient, config transitionConfig, logger log.Logger) ancla.WatchFunc {
+	return func(webhooks []ancla.InternalWebhook) {
 		for _, w := range webhooks {
 			logging.Info(logger).Log("msg", "Pushing webhook update from SNS into Argus")
 
-			internalW := ancla.InternalWebhook{
-				PartnerIDs: []string{"comcast"},
-				Webhook: ancla.Webhook{
-					Address:    w.Address,
-					Config:     w.Config,
-					FailureURL: w.FailureURL,
-					Events:     w.Events,
-					Matcher: ancla.MetadataMatcherConfig{
-						DeviceID: w.Matcher.DeviceId,
-					},
-					Duration: w.Duration,
-					Until:    w.Until,
-				},
-			}
-			item, err := ancla.InternalWebhookToItem(time.Now, internalW)
+			item, err := ancla.InternalWebhookToItem(time.Now, w)
 			if err != nil {
 				logging.Error(logger).Log(logging.MessageKey(), "failed to convert webhook to item", "err", err)
 				continue

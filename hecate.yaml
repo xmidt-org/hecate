@@ -96,41 +96,6 @@ log:
   # (Optional) defaults to false
   json: true
 
-##############################################################################
-# Webhooks Related configuration
-##############################################################################
-
-# The unique fully-qualified-domain-name of the server.  The webhooks library uses it
-# to know which host to use to confirm this service is ready to receive events
-# (Optional if not running webhooks)
-fqdn: "localhost"
-
-# If set to true, message exchange with SNS over HTTP is done without TLS.
-disableSnsTls: false
-
-# start contains configuration for the logic by which this service can
-# fetch the current webhooks without having to wait for SNS
-# It does so by pinging the rest of the cluster at the specified apiPath
-# More details at https://godoc.org/github.com/xmidt-org/webpa-common/webhook#StartConfig
-start:
-  # duration is the max amount of time allowed to wait for webhooks data to be retrieved
-  duration: "20s"
-
-  # path used to query the existing webhooks
-  apiPath: http://localhost:6100/hooks
-
-########################################
-# SNS - Webhooks DNS readiness Configuration
-########################################
-
-# WaitForDns is the duration the webhooks library will wait for this server's DNS record to be
-# propagated. This waiting logic is important so AWS SNS webhook confirmations are not missed
-waitForDns: "30s"
-
-#soa stands for Start of Authority and it's a type of record in a DNS
-soa:
-  # provider is the SOA provider used to verify DNS record readiness of this service
-  # provider: "example-123.awsdns-00.com:17"
 
 ########################################
 # Upstream Config
@@ -140,43 +105,48 @@ soa:
 # need to be set. aws is only used when argus is not set. AWS configuration
 # cannot be nested under upstream due to restrictions in legacy code.
 upstream: 
-  # argus is the configuration needed to setup the Argus client.
-  argus:
+  # JWTParserType establishes which parser type will be used by the JWT token
+  # acquirer used by Argus. Options include 'simple' and 'raw'.
+  # Simple: parser assumes token payloads have the following structure: https://github.com/xmidt-org/bascule/blob/c011b128d6b95fa8358228535c63d1945347adaa/acquire/bearer.go#L77
+  # Raw: parser assumes all of the token payload == JWT token
+  # (Optional). Defaults to 'simple'.
+  JWTParserType: "raw"
+  argus: 
+    # listen is the subsection that configures the listening feature of the argus client
+    # (Optional)
+    listen:
+      # pullInterval provides how often the current webhooks list gets refreshed.
+      pullInterval: 5s
+
+    # bucket is the partition name where webhooks will be stored.
+    bucket: "webhooks"
+
     # address is Argus' network location.
     address: "http://localhost:6600"
-
-    # (Optional) bucket is the partition name for storing the items.
-    # If none is provided, the default is "webhooks"
-    bucket: ""
 
     # auth the authentication method for argus.
     auth:
       # basic configures basic authentication for argus.
       # Must be of form: 'Basic xyz=='
       basic: "Basic dXNlcjpwYXNz"
+  #
+  #    # jwt configures jwt style authentication for argus.
+  #    JWT:
+  #      # requestHeaders are added to the request for the token.
+  #      # (Optional)
+  #      # requestHeaders:
+  #      #   "": ""
+  #
+  #      # authURL is the URL to access the token.
+  #      authURL: ""
+  #
+  #      # timeout is how long the request to get the token will take before
+  #      # timing out.
+  #      timeout: "1m"
+  #
+  #      # buffer is the length of time before a token expires to get a new token.
+  #      buffer: "2m"
 
-# aws provides the configurations the webhooks library needs to read from AWS SNS.
-aws:
-  #AWS access key
-  accessKey: "accessKey"
-
-  #AWS secret key
-  secretKey: "secretKey"
-
-  env: local-dev
-  sns:
-    # awsEndpoint is the AWS endpoint
-    # this must be left out in produ
-    awsEndpoint: http://localhost:4100
-
-    #region is the AWS SNS region
-    region: "us-east-1"
-
-    # topicArn describes the SNS topic this server needs to subscribe to
-    topicArn: arn:aws:sns:us-east-1:000000000000:xmidt-local-caduceus
-
-    #urlPath is the URL path SNS will use to confirm a subscription with this server
-    urlPath: "/api/v2/aws/sns"
 
 ########################################
 # Downstream Config
