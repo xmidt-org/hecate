@@ -6,7 +6,20 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- Dependency update, note vulnerabilities
+
+## [v0.2.1]
+- Patched Vulnerabilities
+  - https://github.com/xmidt-org/hecate/issues/38
+    - https://www.mend.io/vulnerability-database/CVE-2021-38561
+  - https://github.com/xmidt-org/hecate/issues/39
+    - https://www.mend.io/vulnerability-database/CVE-2020-8911
+  - https://github.com/xmidt-org/hecate/issues/33
+    - https://www.mend.io/vulnerability-database/CVE-2022-21698
+  - https://github.com/xmidt-org/hecate/issues/41
+    - https://www.mend.io/vulnerability-database/CVE-2022-28948
+  - https://github.com/xmidt-org/hecate/issues/40
+    - https://www.mend.io/vulnerability-database/CVE-2020-13949
+- Dependency update, note vulnerabilities introduced
   - [github.com/prometheus/client_golang v1.12.2 CVE-2022-21698 no patch available](https://github.com/advisories/GHSA-cg3q-j54f-5p7p)
   - [ github.com/pkg/sftp no patch available.](github.com/pkg/sftp)
 	  - https://ossindex.sonatype.org/vulnerability/sonatype-2021-3619
@@ -36,7 +49,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Initial run of the application. [#8](https://github.com/xmidt-org/hecate/pull/8)
 - Sonarcube fix. [#16](https://github.com/xmidt-org/hecate/pull/16)
 
-[Unreleased]: https://github.com/xmidt-org/hecate/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/xmidt-org/hecate/compare/v0.2.1...HEAD
+[v0.2.1]: https://github.com/xmidt-org/hecate/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/xmidt-org/hecate/compare/v0.1.2...v0.2.0
 [v0.1.2]: https://github.com/xmidt-org/hecate/compare/v0.1.1...v0.1.2
 [v0.1.1]: https://github.com/xmidt-org/hecate/compare/v0.1.0...v0.1.1
