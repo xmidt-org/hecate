@@ -100,96 +100,81 @@ log:
   # (Optional) defaults to false
   json: true
 
-##############################################################################
-# Webhooks Related configuration
-##############################################################################
-
-# The unique fully-qualified-domain-name of the server.  The webhooks library uses it
-# to know which host to use to confirm this service is ready to receive events
-# (Optional if not running webhooks)
-fqdn: hecate
-
-# If set to true, message exchange with SNS over HTTP is done without TLS.
-disableSnsTls: (( grab $DISABLE_SNS_TLS || true ))
-
-# start contains configuration for the logic by which this service can
-# fetch the current webhooks without having to wait for SNS
-# It does so by pinging the rest of the cluster at the specified apiPath
-# More details at https://godoc.org/github.com/xmidt-org/webpa-common/webhook#StartConfig
-start:
-  # duration is the max amount of time allowed to wait for webhooks data to be retrieved
-  duration: "20s"
-
-  # path used to query the existing webhooks
-  apiPath: http://localhost:6100/hooks
-
 ########################################
-# SNS - Webhooks DNS readiness Configuration
+# Upstream Config
 ########################################
 
-# WaitForDns is the duration the webhooks library will wait for this server's DNS record to be
-# propagated. This waiting logic is important so AWS SNS webhook confirmations are not missed
-waitForDns: "30s"
+# upstream provides guidance on where to pull webhooks from. Either aws or argus
+# need to be set. aws is only used when argus is not set. AWS configuration
+# cannot be nested under upstream due to restrictions in legacy code.
+upstream: 
+  # JWTParserType establishes which parser type will be used by the JWT token
+  # acquirer used by Argus. Options include 'simple' and 'raw'.
+  # Simple: parser assumes token payloads have the following structure: https://github.com/xmidt-org/bascule/blob/c011b128d6b95fa8358228535c63d1945347adaa/acquire/bearer.go#L77
+  # Raw: parser assumes all of the token payload == JWT token
+  # (Optional). Defaults to 'simple'.
+  JWTParserType: (( grab $UPSTREAM_JWT_PARSER_TYPE || "raw" ))
+  argus: 
+    # listen is the subsection that configures the listening feature of the argus client
+    # (Optional)
+    listen:
+      # pullInterval provides how often the current webhooks list gets refreshed.
+      pullInterval: (( grab $UPSTREAM_ARGUS_PULL_INTERVAL || "5s" ))
 
-#soa stands for Start of Authority and it's a type of record in a DNS
-soa:
-  # provider is the SOA provider used to verify DNS record readiness of this service
-  provider: (( grab $SOA_PROVIDER || "" ))
+    # bucket is the partition name where webhooks will be stored.
+    bucket: (( grab $UPSTREAM_ARGUS_BUCKET || "webhooks" ))
+
+    # address is Argus' network location.
+    address: (( grab  $UPSTREAM_ARGUS_ENDPOINT || "http://argus0:6600" ))
+
+    # auth the authentication method for argus.
+    auth:
+      # basic configures basic authentication for argus.
+      # Must be of form: 'Basic xyz=='
+      basic: (( concat "Basic " authToken ))
+  #
+  #    # jwt configures jwt style authentication for argus.
+  #    JWT:
+  #      # requestHeaders are added to the request for the token.
+  #      # (Optional)
+  #      # requestHeaders:
+  #      #   "": ""
+  #
+  #      # authURL is the URL to access the token.
+  #      authURL: ""
+  #
+  #      # timeout is how long the request to get the token will take before
+  #      # timing out.
+  #      timeout: "1m"
+  #
+  #      # buffer is the length of time before a token expires to get a new token.
+  #      buffer: "2m"
 
 ########################################
-# SNS - Webhooks AWS Configuration
+# Downstream Config
 ########################################
 
-# aws provides the AWS SNS configurations the webhooks library needs
-aws:
-  #AWS access key
-  accessKey: (( grab $AWS_ACCESS_KEY || "accessKey" ))
-
-  #AWS secret key
-  secretKey: (( grab $AWS_SECRET_KEY || "secretKey" ))
-
-  env: (( grab $AWS_ENV || "local-dev" ))
-
-  sns:
-    # awsEndpoint is the AWS endpoint
-    # this must be left out in production.
-    awsEndpoint: (( grab $AWS_ENDPOINT || "http://goaws:4100" ))
-
-    #region is the AWS SNS region
-    region: (( grab $AWS_REGION || "us-east-1" ))
-
-    # topicArn describes the SNS topic this server needs to subscribe to
-    topicArn: (( grab $AWS_SNS_TOPIC_ARN || "arn:aws:sns:us-east-1:000000000000:xmidt-local-caduceus" ))
-
-    #urlPath is the URL path SNS will use to confirm a subscription with this server
-    urlPath: "/api/v2/aws/sns"
-
-########################################
-# Argus - Webhooks Config
-########################################
-# migration describes how items should be pushed to Argus.
-# (Optional) All the values below will be used as default
-# if none is specified.
-migration:
+# downstream provides guidance on where to push webhooks to.
+downstream:
   # (Optional) owner will be the owner of the items inserted into Argus from SNS.
   # On the reading side of Argus then components can use this value to fetch
   # migrated items.
   owner: (( grab $ARGUS_OWNER || "" ))
 
-# argus is the configuration needed to setup the Argus client.
-argus:
-  # address is Argus' network location.
-  address: (( grab  $ARGUS_ENDPOINT || "http://argus:6600" ))
+  # argus is the configuration needed to setup the Argus client.
+  argus:
+    # address is Argus' network location.
+    address: (( grab  $ARGUS_ENDPOINT || "http://argus1:6800" ))
 
-  # (Optional) bucket is the partition name for storing the items.
-  # If none is provided, the default is "webhooks"
-  bucket: (( grab $ARGUS_BUCKET || "webhooks" ))
+    # (Optional) bucket is the partition name for storing the items.
+    # If none is provided, the default is "webhooks"
+    bucket: (( grab $ARGUS_BUCKET || "webhooks" ))
 
-  # auth the authentication method for argus.
-  auth:
-    # basic configures basic authentication for argus.
-    # Must be of form: 'Basic xyz=='
-    basic: (( concat "Basic " authToken ))
+    # auth the authentication method for argus.
+    auth:
+      # basic configures basic authentication for argus.
+      # Must be of form: 'Basic xyz=='
+      basic: (( concat "Basic " authToken ))
 
 #authtoken used to make spruce work better for authAcquirer
 authToken: (( grab $AUTH_TOKEN || "dXNlcjpwYXNz" ))
