@@ -21,6 +21,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.34.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout v0.20.0 // indirect
 	go.uber.org/fx v1.18.1
-	golang.org/x/net v0.0.0-20220805013720-a33c5aa5df48 // indirect
+	golang.org/x/net v0.0.0-20220812174116-3211cb980234 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 )
