@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v0.2.2]
+- JWT Migration #47
+  - update argus & ancla dependencies
+
 ## [v0.2.1]
 - Patched Vulnerabilities
   - https://github.com/xmidt-org/hecate/issues/38
@@ -49,7 +53,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Initial run of the application. [#8](https://github.com/xmidt-org/hecate/pull/8)
 - Sonarcube fix. [#16](https://github.com/xmidt-org/hecate/pull/16)
 
-[Unreleased]: https://github.com/xmidt-org/hecate/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/xmidt-org/hecate/compare/v0.2.2...HEAD
+[v0.2.1]: https://github.com/xmidt-org/hecate/compare/v0.2.1...v0.2.2
 [v0.2.1]: https://github.com/xmidt-org/hecate/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/xmidt-org/hecate/compare/v0.1.2...v0.2.0
 [v0.1.2]: https://github.com/xmidt-org/hecate/compare/v0.1.1...v0.1.2
