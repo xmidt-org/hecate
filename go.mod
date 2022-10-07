@@ -13,7 +13,7 @@ require (
 	github.com/xmidt-org/ancla v0.3.10
 	github.com/xmidt-org/argus v0.9.1
 	github.com/xmidt-org/arrange v0.3.0
-	github.com/xmidt-org/themis v0.4.8
+	github.com/xmidt-org/themis v0.4.9
 	github.com/xmidt-org/webpa-common v1.11.9
 	go.opentelemetry.io/contrib v1.8.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout v0.20.0 // indirect
