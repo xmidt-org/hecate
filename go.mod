@@ -10,7 +10,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/xmidt-org/ancla v0.3.10
-	github.com/xmidt-org/argus v0.9.3
+	github.com/xmidt-org/argus v0.9.4
 	github.com/xmidt-org/arrange v0.3.0
 	github.com/xmidt-org/themis v0.4.11
 	github.com/xmidt-org/webpa-common v1.11.9
