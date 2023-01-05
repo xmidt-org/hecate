@@ -16,5 +16,5 @@ require (
 	github.com/xmidt-org/webpa-common v1.11.9
 	go.opentelemetry.io/contrib v1.8.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout v0.20.0 // indirect
-	go.uber.org/fx v1.18.2
+	go.uber.org/fx v1.19.0
 )
