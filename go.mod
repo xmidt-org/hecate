@@ -6,7 +6,7 @@ require (
 	github.com/InVisionApp/go-health v2.1.0+incompatible
 	github.com/go-kit/kit v0.12.0
 	github.com/gorilla/mux v1.8.0
-	github.com/prometheus/client_golang v1.15.0
+	github.com/prometheus/client_golang v1.15.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
 	github.com/xmidt-org/ancla v0.3.10
