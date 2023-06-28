@@ -12,28 +12,27 @@ import (
 
 	"github.com/xmidt-org/ancla"
 	"github.com/xmidt-org/arrange"
+	"github.com/xmidt-org/sallust"
 
 	"github.com/InVisionApp/go-health"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmidt-org/argus/chrysom"
 	"github.com/xmidt-org/themis/config"
 	"github.com/xmidt-org/themis/xhealth"
 	"github.com/xmidt-org/themis/xhttp/xhttpserver"
-	"github.com/xmidt-org/themis/xlog"
-	"github.com/xmidt-org/themis/xlog/xloghttp"
-	"github.com/xmidt-org/themis/xmetrics/xmetricshttp"
-	"github.com/xmidt-org/webpa-common/webhook/aws"
-	"github.com/xmidt-org/webpa-common/xmetrics"
-	"go.uber.org/fx"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+	// nolint: staticcheck
+	"github.com/xmidt-org/webpa-common/v2/webhook/aws"
+	// nolint: staticcheck
+	"github.com/xmidt-org/webpa-common/v2/xmetrics"
+
+	"go.uber.org/fx"
+	"go.uber.org/zap"
+
 	"github.com/gorilla/mux"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/xmidt-org/webpa-common/logging"
-	"github.com/xmidt-org/webpa-common/webhook"
+	"github.com/xmidt-org/webpa-common/v2/webhook"
 )
 
 const applicationName = "hecate"
@@ -89,11 +88,10 @@ func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
 	return nil
 }
 
-func newArgusClientConfig(v *viper.Viper, logger log.Logger) (chrysom.BasicClientConfig, error) {
+func newArgusClientConfig(v *viper.Viper, logger *zap.Logger) (chrysom.BasicClientConfig, error) {
 	var config chrysom.BasicClientConfig
 	err := v.UnmarshalKey("argus", &config)
-	config.Logger = logger
-	level.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("argus address: %s", config.Address))
+	logger.Info(fmt.Sprintf("argus address: %s", config.Address))
 	return config, err
 }
 
@@ -109,17 +107,16 @@ func main() {
 	}
 
 	app := fx.New(
-		xlog.Logger(),
 		fx.Supply(v),
 		webhook.ProvideMetrics(),
 		aws.ProvideMetrics(),
 		arrange.ForViper(v),
 		fx.Provide(
 			provideUnmarshaller,
-			xlog.Unmarshal("log"),
-			xloghttp.ProvideStandardBuilders,
+			sallust.WithLogger(),
+			// xloghttp.ProvideStandardBuilders,
 			xmetrics.NewRegistry,
-			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
+			// xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
 			xhealth.Unmarshal("health"),
 			arrange.UnmarshalKey("migration", transitionConfig{}),
 			newArgusClientConfig,
@@ -151,7 +148,7 @@ func main() {
 			buildHealthRoutes,
 			buildMetricsRoutes,
 			buildPprofRoutes,
-			func(lc fx.Lifecycle, factory *webhook.Factory, webhookHandler http.Handler, primaryRouter primaryRouter, v *viper.Viper, logger log.Logger, awsMetrics aws.AWSMetrics) {
+			func(lc fx.Lifecycle, factory *webhook.Factory, webhookHandler http.Handler, primaryRouter primaryRouter, v *viper.Viper, logger *zap.Logger, awsMetrics aws.AWSMetrics) {
 				var scheme = "https"
 				if v.GetBool("disableSnsTls") {
 					scheme = "http"
@@ -163,22 +160,25 @@ func main() {
 				}
 
 				factory.Initialize(primaryRouter.Router, selfURL, v.GetString("soa.provider"), webhookHandler, logger, awsMetrics, time.Now)
-				logging.Info(logger).Log(logging.MessageKey(), fmt.Sprintf("%s is up and running!", applicationName))
+				logger.Info(fmt.Sprintf("%s is up and running!", applicationName))
 			},
-			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, client *chrysom.BasicClient, migrationConfig transitionConfig, logger log.Logger) {
+			func(lc fx.Lifecycle, webhookFactory *webhook.Factory, client *chrysom.BasicClient, migrationConfig transitionConfig, logger *zap.Logger) {
 				webhookFactory.SetExternalUpdate(createArgusSynchronizer(client, migrationConfig, logger))
 				lc.Append(fx.Hook{
 					OnStart: func(context.Context) error {
 						if err := webhookFactory.DnsReady(); err != nil {
-							logging.Error(logger).Log(logging.MessageKey(), "Server was not ready within a time constraint. SNS confirmation could not happen",
-								logging.ErrorKey(), err)
+							logger.Error("Server was not ready within a time constraint. SNS confirmation could not happen", zap.Error(err))
 							return err
 						}
-						logging.Info(logger).Log(logging.MessageKey(), "server is ready to take on subscription confirmations")
+						logger.Info("server is ready to take on subscription confirmations")
 						webhookFactory.PrepareAndStart()
 						return nil
 					},
 				})
+			},
+			func(u config.Unmarshaller) (c sallust.Config, err error) {
+				err = u.UnmarshalKey("log", &c)
+				return
 			},
 		),
 	)
@@ -194,10 +194,10 @@ func main() {
 	}
 }
 
-func createArgusSynchronizer(client *chrysom.BasicClient, config transitionConfig, logger log.Logger) func([]webhook.W) {
+func createArgusSynchronizer(client *chrysom.BasicClient, config transitionConfig, logger *zap.Logger) func([]webhook.W) {
 	return func(webhooks []webhook.W) {
 		for _, w := range webhooks {
-			logging.Info(logger).Log("msg", "Pushing webhook update from SNS into Argus")
+			logger.Info("Pushing webhook update from SNS into Argus")
 
 			internalW := ancla.InternalWebhook{
 				PartnerIDs: []string{"comcast"},
@@ -215,20 +215,20 @@ func createArgusSynchronizer(client *chrysom.BasicClient, config transitionConfi
 			}
 			item, err := ancla.InternalWebhookToItem(time.Now, internalW)
 			if err != nil {
-				logging.Error(logger).Log(logging.MessageKey(), "failed to convert webhook to item", "err", err)
+				logger.Error("failed to convert webhook to item", zap.Error(err))
 				continue
 			}
 
 			result, err := client.PushItem(context.Background(), config.Owner, item)
 			if err != nil {
-				logging.Error(logger).Log(logging.MessageKey(), "failed to push item to Argus", "err", err)
+				logger.Error("failed to push item to Argus", zap.Error(err))
 				continue
 			}
 
 			if result != chrysom.CreatedPushResult && result != chrysom.UpdatedPushResult {
-				logging.Error(logger).Log(logging.MessageKey(), "Unsuccessful item push response from Argus", "err", err)
+				logger.Error("Unsuccessful item push response from Argus", zap.Error(err))
 			}
-			logging.Debug(logger).Log(logging.MessageKey(), "Successfully pushed an webhook item from SNS to Argus")
+			logger.Debug("Successfully pushed an webhook item from SNS to Argus")
 		}
 	}
 }
