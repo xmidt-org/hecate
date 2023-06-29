@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmidt-org/ancla"
 	"github.com/xmidt-org/arrange"
 	"github.com/xmidt-org/sallust"
@@ -19,6 +20,7 @@ import (
 	"github.com/xmidt-org/themis/config"
 	"github.com/xmidt-org/themis/xhealth"
 	"github.com/xmidt-org/themis/xhttp/xhttpserver"
+	"github.com/xmidt-org/themis/xmetrics/xmetricshttp"
 
 	// nolint: staticcheck
 	"github.com/xmidt-org/webpa-common/v2/webhook/aws"
@@ -91,6 +93,9 @@ func setupViper(v *viper.Viper, fs *pflag.FlagSet, name string) (err error) {
 func newArgusClientConfig(v *viper.Viper, logger *zap.Logger) (chrysom.BasicClientConfig, error) {
 	var config chrysom.BasicClientConfig
 	err := v.UnmarshalKey("argus", &config)
+	if config.Bucket == "" {
+		config.Bucket = "webhooks"
+	}
 	logger.Info(fmt.Sprintf("argus address: %s", config.Address))
 	return config, err
 }
@@ -107,16 +112,15 @@ func main() {
 	}
 
 	app := fx.New(
+		sallust.WithLogger(),
 		fx.Supply(v),
 		webhook.ProvideMetrics(),
 		aws.ProvideMetrics(),
 		arrange.ForViper(v),
 		fx.Provide(
 			provideUnmarshaller,
-			sallust.WithLogger(),
-			// xloghttp.ProvideStandardBuilders,
 			xmetrics.NewRegistry,
-			// xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
+			xmetricshttp.Unmarshal("prometheus", promhttp.HandlerOpts{}),
 			xhealth.Unmarshal("health"),
 			arrange.UnmarshalKey("migration", transitionConfig{}),
 			newArgusClientConfig,
