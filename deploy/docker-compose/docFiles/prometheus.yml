@@ -54,11 +54,10 @@ scrape_configs:
 
     static_configs:
       - targets: ['argus:6601']
-  
+
   - job_name: 'hecate'
          # metrics_path defaults to '/metrics'
          # scheme defaults to 'http'.
 
     static_configs:
       - targets: ['hecate:6701']
-  
