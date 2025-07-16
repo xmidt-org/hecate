@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2025 Comcast Cable Communications Management, LLC
+# SPDX-License-Identifier: Apache-2.0
 Local:                              # Environment name that can be passed on the command line
                                     #     (i.e.: ./goaws [Local | Dev]  -- defaults to 'Local')
   Host: goaws                   # hostname of the goaws system  (for docker-compose this is the tag name of the container)
